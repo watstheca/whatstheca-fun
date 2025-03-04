@@ -5,9 +5,9 @@ import './App.css';
 const App: React.FC = () => {
   const [account, setAccount] = useState<string | null>(null);
   const [web3, setWeb3] = useState<Web3 | null>(null);
-  const [jackpotAmount, setJackpotAmount] = useState<number>(150);
-  const bondingAddress = "0x6DFd5526be721a6eC6AAD72769ed0ACB1bb35C38";
-  const gameAddress = "0x4C2e61156Ccd76d2dC351720f3759325b2DC0d27";
+  const [jackpotAmount, setJackpotAmount] = useState<number>(150); // Used in JSX
+  const bondingAddress = "0x6DFd5526be721a6eC6AAD72769ed0ACB1bb35C38"; // To be used with ABI
+  const gameAddress = "0x4C2e61156Ccd76d2dC351720f3759325b2DC0d27"; // To be used with ABI
 
   useEffect(() => {
     const initWeb3 = async () => {
@@ -43,19 +43,19 @@ const App: React.FC = () => {
 
   const buyGame = async (amount: number) => {
     if (web3 && account) {
-      console.log(`Buying ${amount} GAME with ${account}`);
+      console.log(`Buying ${amount} GAME with ${account} via ${bondingAddress}`);
     }
   };
 
   const makeGuess = async () => {
     if (web3 && account) {
-      console.log(`Guess made with ${account} for 10,000 GAME`);
+      console.log(`Guess made with ${account} for 10,000 GAME via ${gameAddress}`);
     }
   };
 
   const payForHint = async () => {
     if (web3 && account) {
-      console.log(`Paid for hint with ${account} for 5,000 GAME`);
+      console.log(`Paid for hint with ${account} for 5,000 GAME via ${gameAddress}`);
     }
   };
 
