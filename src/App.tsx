@@ -5,7 +5,7 @@ import './App.css';
 const App: React.FC = () => {
   const [account, setAccount] = useState<string | null>(null);
   const [web3, setWeb3] = useState<Web3 | null>(null);
-  const [jackpotAmount, setJackpotAmount] = useState<number>(150); // Used in JSX
+  const [jackpotAmount, setJackpotAmount] = useState<number>(150); // Used dynamically
   const bondingAddress = "0x6DFd5526be721a6eC6AAD72769ed0ACB1bb35C38"; // To be used with ABI
   const gameAddress = "0x4C2e61156Ccd76d2dC351720f3759325b2DC0d27"; // To be used with ABI
 
@@ -18,6 +18,8 @@ const App: React.FC = () => {
           const accounts = await web3Instance.eth.getAccounts();
           setAccount(accounts[0]);
           setWeb3(web3Instance);
+          // Simulate jackpot update (placeholder)
+          setJackpotAmount(160); // Example update
         } catch (error) {
           console.error("Wallet connection failed:", error);
         }
@@ -44,18 +46,22 @@ const App: React.FC = () => {
   const buyGame = async (amount: number) => {
     if (web3 && account) {
       console.log(`Buying ${amount} GAME with ${account} via ${bondingAddress}`);
+      // Simulate jackpot increase
+      setJackpotAmount(jackpotAmount + 1);
     }
   };
 
   const makeGuess = async () => {
     if (web3 && account) {
       console.log(`Guess made with ${account} for 10,000 GAME via ${gameAddress}`);
+      setJackpotAmount(jackpotAmount + 1); // Simulate fee contribution
     }
   };
 
   const payForHint = async () => {
     if (web3 && account) {
       console.log(`Paid for hint with ${account} for 5,000 GAME via ${gameAddress}`);
+      setJackpotAmount(jackpotAmount + 0.5); // Simulate hint fee
     }
   };
 
