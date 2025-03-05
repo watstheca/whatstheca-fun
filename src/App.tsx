@@ -621,18 +621,22 @@ const App: React.FC = () => {
     const initWeb3 = async () => {
       if (window.ethereum) {
         const web3Instance = new Web3(window.ethereum);
-        await window.ethereum.request({ method: 'eth_requestAccounts' });
-        const accounts = await web3Instance.eth.getAccounts();
-        setAccount(accounts[0]);
-        setWeb3(web3Instance);
+        try {
+          await window.ethereum.request({ method: 'eth_requestAccounts' });
+          const accounts = await web3Instance.eth.getAccounts();
+          setAccount(accounts[0]);
+          setWeb3(web3Instance);
 
-        const jackpotGame = new web3Instance.eth.Contract(jackpotGameABI, jackpotGameAddress);
-        const jackpot = await jackpotGame.methods.jackpotAmount().call();
-        const next = await jackpotGame.methods.nextJackpotAmount().call();
-        const guesses = await jackpotGame.methods.totalGuesses().call();
-        setJackpotAmount(parseFloat(web3Instance.utils.fromWei(jackpot, 'ether')));
-        setNextJackpotAmount(parseFloat(web3Instance.utils.fromWei(next, 'ether')));
-        setTotalGuesses(Number(guesses));
+          const jackpotGame = new web3Instance.eth.Contract(jackpotGameABI, jackpotGameAddress);
+          const jackpot = (await jackpotGame.methods.jackpotAmount().call()) as unknown as string;
+          const next = (await jackpotGame.methods.nextJackpotAmount().call()) as unknown as string;
+          const guesses = (await jackpotGame.methods.totalGuesses().call()) as unknown as string;
+          setJackpotAmount(parseFloat(web3Instance.utils.fromWei(jackpot || '0', 'ether')));
+          setNextJackpotAmount(parseFloat(web3Instance.utils.fromWei(next || '0', 'ether')));
+          setTotalGuesses(Number(guesses || '0'));
+        } catch (error) {
+          console.error("Failed to initialize Web3 or fetch contract data:", error);
+        }
       }
     };
     initWeb3();
@@ -656,7 +660,7 @@ const App: React.FC = () => {
   const buyGame = async (amount: number) => {
     if (web3 && account) {
       const bonding = new web3.eth.Contract(bondingABI, bondingAddress);
-      const price = await bonding.methods.INITIAL_PRICE().call();
+      const price = (await bonding.methods.INITIAL_PRICE().call()) as unknown as string;
       const cost = web3.utils.toWei((amount * Number(price) / 10**18).toString(), 'ether');
       await bonding.methods.buy(web3.utils.toWei(amount.toString(), 'mwei')).send({ from: account, value: cost });
       alert(`Bought ${amount} GAME`);
@@ -667,15 +671,15 @@ const App: React.FC = () => {
     if (web3 && account) {
       const game = new web3.eth.Contract(gameTokenABI, gameAddress);
       const jackpotGame = new web3.eth.Contract(jackpotGameABI, jackpotGameAddress);
-      const cost = await jackpotGame.methods.guessCost().call();
+      const cost = (await jackpotGame.methods.guessCost().call()) as unknown as string;
       await game.methods.approve(jackpotGameAddress, cost).send({ from: account });
       await jackpotGame.methods.submitGuess().send({ from: account });
-      const jackpot = await jackpotGame.methods.jackpotAmount().call();
-      const next = await jackpotGame.methods.nextJackpotAmount().call();
-      const guesses = await jackpotGame.methods.totalGuesses().call();
-      setJackpotAmount(parseFloat(web3.utils.fromWei(jackpot, 'ether')));
-      setNextJackpotAmount(parseFloat(web3.utils.fromWei(next, 'ether')));
-      setTotalGuesses(Number(guesses));
+      const jackpot = (await jackpotGame.methods.jackpotAmount().call()) as unknown as string;
+      const next = (await jackpotGame.methods.nextJackpotAmount().call()) as unknown as string;
+      const guesses = (await jackpotGame.methods.totalGuesses().call()) as unknown as string;
+      setJackpotAmount(parseFloat(web3.utils.fromWei(jackpot || '0', 'ether')));
+      setNextJackpotAmount(parseFloat(web3.utils.fromWei(next || '0', 'ether')));
+      setTotalGuesses(Number(guesses || '0'));
       alert("Guess submitted!");
     }
   };
@@ -684,7 +688,7 @@ const App: React.FC = () => {
     if (web3 && account) {
       const game = new web3.eth.Contract(gameTokenABI, gameAddress);
       const jackpotGame = new web3.eth.Contract(jackpotGameABI, jackpotGameAddress);
-      const cost = await jackpotGame.methods.hintCost().call();
+      const cost = (await jackpotGame.methods.hintCost().call()) as unknown as string;
       await game.methods.approve(jackpotGameAddress, cost).send({ from: account });
       await jackpotGame.methods.buyHint().send({ from: account });
       alert("Hint purchased!");
