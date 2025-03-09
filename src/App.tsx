@@ -1746,7 +1746,7 @@ const TOKEN_ADDRESS = '0x0388c8502CA45f04fA5f67a4596fE727c80290C5';
 const BONDING_CURVE_ADDRESS = '0x31Ef1dF550F44FEc3c0285847Ccf8b2a1bc794Cc';
 const SONIC_TESTNET_CHAIN_ID = '57054';
 const SONIC_TESTNET_RPC_URL = 'https://rpc.blaze.soniclabs.com';
-const HINT_API_URL = 'https://your-site-name.netlify.app/.netlify/functions/get-hint'; // Replace with your Netlify site URL after deployment
+const HINT_API_URL = 'https://whatstheca.fun/.netlify/functions/get-hint';
 
 const buttonStyle = {
     margin: '5px',
