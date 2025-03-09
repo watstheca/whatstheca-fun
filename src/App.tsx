@@ -1,18 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Web3 from 'web3';
 import './styles.css';
 
 interface HintRequestedEvent {
-  returnValues: {
-      player: string;
-      hintIndex: string;
-  };
-  event: string;
-  signature: string;
-  raw: {
-      data: string;
-      topics: string[];
-  };
+    returnValues: {
+        player: string;
+        hintIndex: string;
+    };
+    event: string;
+    signature: string;
+    raw: {
+        data: string;
+        topics: string[];
+    };
 }
 
 const jackpotGameABI = [
