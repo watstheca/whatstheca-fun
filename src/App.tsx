@@ -1789,8 +1789,8 @@ const App: React.FC = () => {
                                 method: 'wallet_switchEthereumChain',
                                 params: [{ chainId: `0x${parseInt(SONIC_TESTNET_CHAIN_ID).toString(16)}` }],
                             });
-                        } catch (switchError: any) {
-                            if (switchError.code === 4902) {
+                        } catch (switchError) {
+                            if (switchError instanceof Error && switchError.code === 4902) {
                                 await window.ethereum.request({
                                     method: 'wallet_addEthereumChain',
                                     params: [{
@@ -1826,7 +1826,8 @@ const App: React.FC = () => {
                     fetchGameStats();
                 } catch (error) {
                     console.error("Web3 initialization error:", error);
-                    setError("Failed to connect or load data. Check console.");
+                    const errorMessage = error instanceof Error ? error.message : 'Check console.';
+                    setError(`Failed to connect or load data: ${errorMessage}`);
                 }
             } else {
                 setError("Please install MetaMask or Rabby to connect.");
@@ -1846,8 +1847,8 @@ const App: React.FC = () => {
                             method: 'wallet_switchEthereumChain',
                             params: [{ chainId: `0x${parseInt(SONIC_TESTNET_CHAIN_ID).toString(16)}` }],
                         });
-                    } catch (switchError: any) {
-                        if (switchError.code === 4902) {
+                    } catch (switchError) {
+                        if (switchError instanceof Error && switchError.code === 4902) {
                             await window.ethereum.request({
                                 method: 'wallet_addEthereumChain',
                                 params: [{
@@ -1874,7 +1875,8 @@ const App: React.FC = () => {
                 setError(null);
             } catch (error) {
                 console.error("Wallet connection error:", error);
-                setError("Failed to connect wallet. Check console.");
+                const errorMessage = error instanceof Error ? error.message : 'Check console.';
+                setError(`Failed to connect wallet: ${errorMessage}`);
             }
         } else {
             setError("Please install MetaMask or Rabby to connect.");
@@ -1921,7 +1923,8 @@ const App: React.FC = () => {
             fetchGameStats();
         } catch (error) {
             console.error("Buy 100X error:", error);
-            setError(`Failed to buy 100X: ${error.message || 'Check console.'}`);
+            const errorMessage = error instanceof Error ? error.message : 'Check console.';
+            setError(`Failed to buy 100X: ${errorMessage}`);
         }
     };
 
@@ -1958,7 +1961,8 @@ const App: React.FC = () => {
             fetchGameStats();
         } catch (error) {
             console.error("Sell 100X error:", error);
-            setError(`Failed to sell 100X: ${error.message || 'Check console.'}`);
+            const errorMessage = error instanceof Error ? error.message : 'Check console.';
+            setError(`Failed to sell 100X: ${errorMessage}`);
         }
     };
 
@@ -2004,7 +2008,8 @@ const App: React.FC = () => {
             fetchGameStats();
         } catch (error) {
             console.error("Commit guess error:", error);
-            setError(`Failed to submit guess: ${error.message || 'Check console.'}`);
+            const errorMessage = error instanceof Error ? error.message : 'Check console.';
+            setError(`Failed to submit guess: ${errorMessage}`);
         }
     };
 
@@ -2034,7 +2039,8 @@ const App: React.FC = () => {
             setNonce('');
         } catch (error) {
             console.error("Reveal guess error:", error);
-            setError(`Failed to reveal guess: ${error.message || 'Check console.'}`);
+            const errorMessage = error instanceof Error ? error.message : 'Check console.';
+            setError(`Failed to reveal guess: ${errorMessage}`);
         }
     };
 
@@ -2079,12 +2085,14 @@ const App: React.FC = () => {
                         setError("Hint retrieved!");
                     } catch (fetchError) {
                         console.error("Hint fetch error:", fetchError);
-                        setError(`Failed to fetch hint #${hintIndex}. Check backend or social media.`);
+                        const errorMessage = fetchError instanceof Error ? fetchError.message : 'Check console.';
+                        setError(`Failed to fetch hint #${hintIndex}: ${errorMessage}`);
                     }
                 })
                 .on('error', (error) => {
                     console.error("Event error:", error);
-                    setError("Failed to receive hint event. Check console.");
+                    const errorMessage = error instanceof Error ? error.message : 'Check console.';
+                    setError(`Failed to receive hint event: ${errorMessage}`);
                 });
 
             await jackpotContract.methods.requestHint().send({ from: account });
@@ -2092,7 +2100,8 @@ const App: React.FC = () => {
             fetchGameStats();
         } catch (error) {
             console.error("Request hint error:", error);
-            setError(`Failed to request hint: ${error.message || 'Check console.'}`);
+            const errorMessage = error instanceof Error ? error.message : 'Check console.';
+            setError(`Failed to request hint: ${errorMessage}`);
         }
     };
 
@@ -2136,7 +2145,7 @@ const App: React.FC = () => {
                 const split = splitCall as [string, string, string, string];
 
                 setTotalGuesses(parseInt(guesses));
-                setJackpotAmount(web3.utils.fromWei(jackpot, 'ether'));
+                setJackpotAmount(web3.utils.fromWei(jacket, 'ether'));
                 setNextJackpotAmount(web3.utils.fromWei(nextJackpot, 'ether'));
                 setPlayerGuesses(parseInt(player));
                 setGuessCost(web3.utils.fromWei(cost, 'mwei'));
@@ -2144,7 +2153,8 @@ const App: React.FC = () => {
                 setSplits(split.map(val => Number(val)));
             } catch (error) {
                 console.error("Fetch game stats error:", error);
-                setError("Failed to fetch game stats. Check console.");
+                const errorMessage = error instanceof Error ? error.message : 'Check console.';
+                setError(`Failed to fetch game stats: ${errorMessage}`);
             }
         }
     };
@@ -2205,7 +2215,7 @@ const App: React.FC = () => {
                             placeholder="Amount to sell"
                             style={{ margin: '5px', padding: '5px' }}
                             value={sellAmount}
-                            onChange={(e) => setSellAmount(e.target.value)} // Fixed to setSellAmount
+                            onChange={(e) => setSellAmount(e.target.value)}
                         />
                         <button
                             style={{ ...buttonStyle, backgroundColor: '#ff0000', color: '#fff' }}
