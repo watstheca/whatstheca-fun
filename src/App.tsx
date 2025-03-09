@@ -1202,44 +1202,73 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const initWeb3 = async () => {
-      if (!window.ethereum) {
-        setError("Please install MetaMask or Rabby to connect.");
-        return;
-      }
-      const web3Instance = new Web3(window.ethereum);
       try {
-        const chainId = await web3Instance.eth.getChainId();
-        if (chainId.toString() !== SONIC_TESTNET_CHAIN_ID) {
+        let web3Instance = new Web3(new Web3.providers.HttpProvider(SONIC_TESTNET_RPC_URL));
+        console.log("Initial provider set to:", web3Instance.currentProvider);
+        let accounts: string[] = [];
+
+        // Handle wallet for accounts only, if available
+        if (window.ethereum) {
+          const walletWeb3 = new Web3(window.ethereum);
           try {
-            await window.ethereum.request({
-              method: 'wallet_switchEthereumChain',
-              params: [{ chainId: `0x${parseInt(SONIC_TESTNET_CHAIN_ID).toString(16)}` }],
-            });
-          } catch (switchError: any) {
-            if (switchError.code === 4902) {
+            accounts = await walletWeb3.eth.getAccounts();
+          } catch (connectError) {
+            setError("Please connect your wallet (e.g., MetaMask/Rabby) and try again.");
+            return;
+          }
+
+          if (!accounts || accounts.length === 0) {
+            setError("No accounts found. Please unlock your wallet and connect.");
+            return;
+          }
+          setAccount(accounts[0]);
+
+          // Confirm and switch network using wallet
+          const chainId = await walletWeb3.eth.getChainId();
+          console.log("Initial chain ID:", chainId);
+          if (chainId.toString() !== SONIC_TESTNET_CHAIN_ID) {
+            try {
               await window.ethereum.request({
-                method: 'wallet_addEthereumChain',
-                params: [{
-                  chainId: `0x${parseInt(SONIC_TESTNET_CHAIN_ID).toString(16)}`,
-                  chainName: 'Sonic Testnet',
-                  rpcUrls: [SONIC_TESTNET_RPC_URL],
-                  nativeCurrency: { name: 'Sonic', symbol: 'S', decimals: 18 },
-                  blockExplorerUrls: ['https://testnet.soniclabs.com'],
-                }],
+                method: 'wallet_switchEthereumChain',
+                params: [{ chainId: `0x${parseInt(SONIC_TESTNET_CHAIN_ID).toString(16)}` }],
               });
-            } else {
-              throw switchError;
+            } catch (switchError: any) {
+              if (switchError.code === 4902) {
+                await window.ethereum.request({
+                  method: 'wallet_addEthereumChain',
+                  params: [{
+                    chainId: `0x${parseInt(SONIC_TESTNET_CHAIN_ID).toString(16)}`,
+                    chainName: 'Sonic Testnet',
+                    rpcUrls: [SONIC_TESTNET_RPC_URL],
+                    nativeCurrency: { name: 'Sonic', symbol: 'S', decimals: 18 },
+                    blockExplorerUrls: ['https://testnet.sonicscan.org'],
+                  }],
+                });
+              } else {
+                throw switchError;
+              }
             }
           }
-        }
-        await window.ethereum.request({ method: 'eth_requestAccounts' });
-        const accounts = await web3Instance.eth.getAccounts();
-        setAccount(accounts[0]);
-        setWeb3(web3Instance);
 
-        const jackpotGame = new web3Instance.eth.Contract(jackpotGameABI, JACKPOT_ADDRESS);
-        const token100X = new web3Instance.eth.Contract(token100xABI, TOKEN_ADDRESS);
-        const bondingCurve = new web3Instance.eth.Contract(bondingCurveABI, BONDING_CURVE_ADDRESS);
+          const finalChainId = await walletWeb3.eth.getChainId();
+          console.log("Final chain ID after switch:", finalChainId);
+          if (finalChainId.toString() !== SONIC_TESTNET_CHAIN_ID) {
+            setError("Network switch failed. Using direct RPC.");
+          }
+        } else {
+          setError("No wallet detected. Using direct RPC provider.");
+          // Note: HttpProvider won't return accounts; this is a fallback for read-only mode
+        }
+
+        // Use the Sonic RPC provider for all interactions
+        web3Instance = new Web3(new Web3.providers.HttpProvider(SONIC_TESTNET_RPC_URL));
+        setWeb3(web3Instance);
+        console.log("Using final provider:", web3Instance.currentProvider);
+
+        // Initialize contracts with the Sonic RPC provider
+        const jackpotGame = new web3Instance.eth.Contract(jackpotGameABI, JACKPOT_ADDRESS, { from: accounts[0] || undefined });
+        const token100X = new web3Instance.eth.Contract(token100xABI, TOKEN_ADDRESS, { from: accounts[0] || undefined });
+        const bondingCurve = new web3Instance.eth.Contract(bondingCurveABI, BONDING_CURVE_ADDRESS, { from: accounts[0] || undefined });
 
         setJackpotContract(jackpotGame);
         setTokenContract(token100X);
@@ -1441,51 +1470,8 @@ const App: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    if (!web3 || !account || !jackpotContract || !tokenContract) return;
-
-    const handleHintRequested = async (event: any) => {
-      const hintIndex = (event.returnValues as { player: string; hintIndex: string }).hintIndex;
-      try {
-        const response = await fetch(`${HINT_API_URL}?index=${hintIndex}&player=${account}`);
-        if (!response.ok) {
-          throw new Error(`HTTP error! Status: ${response.status}`);
-        }
-        const hintData: HintData = await response.json();
-        setHint(`Hint #${hintIndex}: ${hintData.hint}`);
-        setError("Hint retrieved!");
-      } catch (fetchError) {
-        console.error("Hint fetch error:", fetchError);
-        setError(`Failed to fetch hint #${hintIndex}: ${fetchError instanceof Error ? fetchError.message : 'Check console.'}`);
-      }
-    };
-
-    if (web3 && jackpotContract) {
-      let subscription: any; // Temporary any, refine if needed
-      web3.eth.subscribe('logs', {
-        address: JACKPOT_ADDRESS,
-        topics: [web3.utils.sha3('HintRequested(address,uint256)')!, web3.utils.padLeft(account, 64)]
-      }).then((sub) => {
-        subscription = sub;
-        sub.on('data', (event: any) => {
-          handleHintRequested({ returnValues: { hintIndex: event.data } });
-        });
-        sub.on('error', (error: any) => {
-          console.error("Event error:", error);
-          setError(`Failed to receive hint event: ${error instanceof Error ? error.message : 'Check console.'}`);
-        });
-      });
-
-      return () => {
-        if (subscription) {
-          subscription.unsubscribe((error: any, success: boolean) => {
-            if (error) console.error("Failed to unsubscribe from HintRequested:", error);
-            if (success) console.log("Successfully unsubscribed from HintRequested");
-          });
-        }
-      };
-    }
-  }, [web3, account, jackpotContract, tokenContract]);
+  // Removed subscription for HintRequested as HttpProvider doesn't support subscriptions
+  // Hint fetching is handled via requestHint function
 
   const requestHint = async () => {
     if (!web3 || !account || !jackpotContract || !tokenContract) {
