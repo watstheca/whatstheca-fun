@@ -2,6 +2,19 @@ import React, { useState, useEffect } from 'react';
 import Web3 from 'web3';
 import './styles.css';
 
+interface HintRequestedEvent {
+  returnValues: {
+      player: string;
+      hintIndex: string;
+  };
+  event: string;
+  signature: string;
+  raw: {
+      data: string;
+      topics: string[];
+  };
+}
+
 const jackpotGameABI = [
   {
     "inputs": [
@@ -2074,65 +2087,65 @@ const App: React.FC = () => {
     };
 
     const requestHint = async () => {
-        if (!web3 || !account || !jackpotContract || !tokenContract) {
-            setError("Wallet not connected or contracts not initialized.");
-            return;
-        }
-        try {
-            const cost = await jackpotContract.methods.hintCost().call() as string;
-            const userBalanceCall = await tokenContract.methods.balanceOf(account).call();
-            if (!userBalanceCall || typeof userBalanceCall !== 'string') {
-                throw new Error("Failed to fetch user balance");
-            }
-            const userBalance = BigInt(userBalanceCall);
-            const currentAllowanceCall = await tokenContract.methods.allowance(account, JACKPOT_ADDRESS).call();
-            if (!currentAllowanceCall || typeof currentAllowanceCall !== 'string') {
-                throw new Error("Failed to fetch allowance");
-            }
-            const currentAllowance = BigInt(currentAllowanceCall);
-
-            if (BigInt(userBalance) < BigInt(cost)) {
-                throw new Error(`Insufficient 100X balance: Need ${web3.utils.fromWei(cost, 'mwei')} 100X`);
-            }
-
-            if (currentAllowance > 0n) {
-                await tokenContract.methods.approve(JACKPOT_ADDRESS, 0).send({ from: account });
-            }
-
-            await tokenContract.methods.approve(JACKPOT_ADDRESS, cost).send({ from: account });
-
-            jackpotContract.events.HintRequested({ filter: { player: account } })
-                .on('data', async (event: Web3.EventData) => {
-                    const hintIndex = event.returnValues.hintIndex as string;
-                    try {
-                        const response = await fetch(`${HINT_API_URL}?index=${hintIndex}&player=${account}`);
-                        if (!response.ok) {
-                            throw new Error(`HTTP error! Status: ${response.status}`);
-                        }
-                        const hintData: HintData = await response.json();
-                        setHint(`Hint #${hintIndex}: ${hintData.hint}`);
-                        setError("Hint retrieved!");
-                    } catch (fetchError: unknown) {
-                        console.error("Hint fetch error:", fetchError);
-                        const errorMessage = fetchError instanceof Error ? fetchError.message : 'Check console.';
-                        setError(`Failed to fetch hint #${hintIndex}: ${errorMessage}`);
-                    }
-                })
-                .on('error', (error: Error) => {
-                    console.error("Event error:", error);
-                    const errorMessage = error instanceof Error ? error.message : 'Check console.';
-                    setError(`Failed to receive hint event: ${errorMessage}`);
-                });
-
-            await jackpotContract.methods.requestHint().send({ from: account });
-            setError("Hint requested! Waiting for hint...");
-            await fetchGameStats();
-        } catch (error: unknown) {
-            console.error("Request hint error:", error);
-            const errorMessage = error instanceof Error ? error.message : 'Check console.';
-            setError(`Failed to request hint: ${errorMessage}`);
-        }
-    };
+      if (!web3 || !account || !jackpotContract || !tokenContract) {
+          setError("Wallet not connected or contracts not initialized.");
+          return;
+      }
+      try {
+          const cost = await jackpotContract.methods.hintCost().call() as string;
+          const userBalanceCall = await tokenContract.methods.balanceOf(account).call();
+          if (!userBalanceCall || typeof userBalanceCall !== 'string') {
+              throw new Error("Failed to fetch user balance");
+          }
+          const userBalance = BigInt(userBalanceCall);
+          const currentAllowanceCall = await tokenContract.methods.allowance(account, JACKPOT_ADDRESS).call();
+          if (!currentAllowanceCall || typeof currentAllowanceCall !== 'string') {
+              throw new Error("Failed to fetch allowance");
+          }
+          const currentAllowance = BigInt(currentAllowanceCall);
+  
+          if (BigInt(userBalance) < BigInt(cost)) {
+              throw new Error(`Insufficient 100X balance: Need ${web3.utils.fromWei(cost, 'mwei')} 100X`);
+          }
+  
+          if (currentAllowance > 0n) {
+              await tokenContract.methods.approve(JACKPOT_ADDRESS, 0).send({ from: account });
+          }
+  
+          await tokenContract.methods.approve(JACKPOT_ADDRESS, cost).send({ from: account });
+  
+          jackpotContract.events.HintRequested({ filter: { player: account } })
+              .on('data', async (event: HintRequestedEvent) => {
+                  const hintIndex = event.returnValues.hintIndex as string;
+                  try {
+                      const response = await fetch(`${HINT_API_URL}?index=${hintIndex}&player=${account}`);
+                      if (!response.ok) {
+                          throw new Error(`HTTP error! Status: ${response.status}`);
+                      }
+                      const hintData: HintData = await response.json();
+                      setHint(`Hint #${hintIndex}: ${hintData.hint}`);
+                      setError("Hint retrieved!");
+                  } catch (fetchError: unknown) {
+                      console.error("Hint fetch error:", fetchError);
+                      const errorMessage = fetchError instanceof Error ? fetchError.message : 'Check console.';
+                      setError(`Failed to fetch hint #${hintIndex}: ${errorMessage}`);
+                  }
+              })
+              .on('error', (error: Error) => {
+                  console.error("Event error:", error);
+                  const errorMessage = error instanceof Error ? error.message : 'Check console.';
+                  setError(`Failed to receive hint event: ${errorMessage}`);
+              });
+  
+          await jackpotContract.methods.requestHint().send({ from: account });
+          setError("Hint requested! Waiting for hint...");
+          await fetchGameStats();
+      } catch (error: unknown) {
+          console.error("Request hint error:", error);
+          const errorMessage = error instanceof Error ? error.message : 'Check console.';
+          setError(`Failed to request hint: ${errorMessage}`);
+      }
+  };
 
     const fetchGameStats = async () => {
         if (jackpotContract && tokenContract && bondingContract && account && web3) {
