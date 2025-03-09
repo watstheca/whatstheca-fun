@@ -1748,7 +1748,8 @@ const SONIC_TESTNET_CHAIN_ID = '57054';
 const SONIC_TESTNET_RPC_URL = 'https://rpc.blaze.soniclabs.com';
 const HINT_API_URL = 'https://whatstheca.fun/.netlify/functions/get-hint';
 
-const buttonStyle = {
+// Define button style
+const buttonStyle: React.CSSProperties = {
     margin: '5px',
     padding: '10px',
     border: 'none',
@@ -1756,6 +1757,17 @@ const buttonStyle = {
     cursor: 'pointer',
     transition: 'background-color 0.2s, transform 0.1s',
 };
+
+// Define interface for hint data
+interface HintData {
+    hint: string;
+}
+
+// Define interface for MetaMask error
+interface MetaMaskError {
+    code: number;
+    message: string;
+}
 
 const App: React.FC = () => {
     const [account, setAccount] = useState<string | null>(null);
@@ -1789,9 +1801,9 @@ const App: React.FC = () => {
                                 method: 'wallet_switchEthereumChain',
                                 params: [{ chainId: `0x${parseInt(SONIC_TESTNET_CHAIN_ID).toString(16)}` }],
                             });
-                        } catch (switchError) {
+                        } catch (switchError: unknown) {
                             const isMetaMaskError = switchError && typeof switchError === 'object' && 'code' in switchError;
-                            if (isMetaMaskError && (switchError as any).code === 4902) {
+                            if (isMetaMaskError && (switchError as MetaMaskError).code === 4902) {
                                 await window.ethereum.request({
                                     method: 'wallet_addEthereumChain',
                                     params: [{
@@ -1824,8 +1836,8 @@ const App: React.FC = () => {
                     setTokenContract(token100X);
                     setBondingContract(bondingCurve);
 
-                    fetchGameStats();
-                } catch (error) {
+                    await fetchGameStats();
+                } catch (error: unknown) {
                     console.error("Web3 initialization error:", error);
                     const errorMessage = error instanceof Error ? error.message : 'Check console.';
                     setError(`Failed to connect or load data: ${errorMessage}`);
@@ -1848,9 +1860,9 @@ const App: React.FC = () => {
                             method: 'wallet_switchEthereumChain',
                             params: [{ chainId: `0x${parseInt(SONIC_TESTNET_CHAIN_ID).toString(16)}` }],
                         });
-                    } catch (switchError) {
+                    } catch (switchError: unknown) {
                         const isMetaMaskError = switchError && typeof switchError === 'object' && 'code' in switchError;
-                        if (isMetaMaskError && (switchError as any).code === 4902) {
+                        if (isMetaMaskError && (switchError as MetaMaskError).code === 4902) {
                             await window.ethereum.request({
                                 method: 'wallet_addEthereumChain',
                                 params: [{
@@ -1875,7 +1887,7 @@ const App: React.FC = () => {
                 setAccount(accounts[0]);
                 setWeb3(web3Instance);
                 setError(null);
-            } catch (error) {
+            } catch (error: unknown) {
                 console.error("Wallet connection error:", error);
                 const errorMessage = error instanceof Error ? error.message : 'Check console.';
                 setError(`Failed to connect wallet: ${errorMessage}`);
@@ -1893,9 +1905,21 @@ const App: React.FC = () => {
         try {
             const token100X = new web3.eth.Contract(token100xABI, TOKEN_ADDRESS);
             const amount = web3.utils.toWei(buyAmount, 'mwei');
-            const initialPrice = BigInt((await bondingContract.methods.initialPrice().call()) as string);
-            const priceIncrease = BigInt((await bondingContract.methods.priceIncrease().call()) as string);
-            const totalBought = BigInt((await bondingContract.methods.totalBought().call()) as string);
+            const initialPriceCall = await bondingContract.methods.initialPrice().call();
+            if (!initialPriceCall || typeof initialPriceCall !== 'string') {
+                throw new Error("Failed to fetch initial price");
+            }
+            const initialPrice = BigInt(initialPriceCall);
+            const priceIncreaseCall = await bondingContract.methods.priceIncrease().call();
+            if (!priceIncreaseCall || typeof priceIncreaseCall !== 'string') {
+                throw new Error("Failed to fetch price increase");
+            }
+            const priceIncrease = BigInt(priceIncreaseCall);
+            const totalBoughtCall = await bondingContract.methods.totalBought().call();
+            if (!totalBoughtCall || typeof totalBoughtCall !== 'string') {
+                throw new Error("Failed to fetch total bought");
+            }
+            const totalBought = BigInt(totalBoughtCall);
             const tokenBalanceCall = await token100X.methods.balanceOf(BONDING_CURVE_ADDRESS).call();
             if (!tokenBalanceCall || typeof tokenBalanceCall !== 'string') {
                 throw new Error("Failed to fetch token balance from BondingCurve");
@@ -1922,8 +1946,8 @@ const App: React.FC = () => {
             await bondingContract.methods.buy(amount).send({ from: account, value: costInWei });
             setError(`Bought ${buyAmount} 100X!`);
             setBuyAmount('');
-            fetchGameStats();
-        } catch (error) {
+            await fetchGameStats();
+        } catch (error: unknown) {
             console.error("Buy 100X error:", error);
             const errorMessage = error instanceof Error ? error.message : 'Check console.';
             setError(`Failed to buy 100X: ${errorMessage}`);
@@ -1960,8 +1984,8 @@ const App: React.FC = () => {
             await bondingContract.methods.sell(amount).send({ from: account });
             setError(`Sold ${sellAmount} 100X!`);
             setSellAmount('');
-            fetchGameStats();
-        } catch (error) {
+            await fetchGameStats();
+        } catch (error: unknown) {
             console.error("Sell 100X error:", error);
             const errorMessage = error instanceof Error ? error.message : 'Check console.';
             setError(`Failed to sell 100X: ${errorMessage}`);
@@ -2003,12 +2027,15 @@ const App: React.FC = () => {
 
             const nonceValue = web3.utils.randomHex(32);
             const guessHash = web3.utils.sha3(guessInput + nonceValue);
+            if (!guessHash) {
+                throw new Error("Failed to generate guess hash");
+            }
             setNonce(nonceValue);
 
             await jackpotContract.methods.commitGuess(guessHash).send({ from: account });
             setError("Guess submitted! Wait 20 seconds to reveal.");
-            fetchGameStats();
-        } catch (error) {
+            await fetchGameStats();
+        } catch (error: unknown) {
             console.error("Commit guess error:", error);
             const errorMessage = error instanceof Error ? error.message : 'Check console.';
             setError(`Failed to submit guess: ${errorMessage}`);
@@ -2024,7 +2051,7 @@ const App: React.FC = () => {
             const tx = await jackpotContract.methods.revealGuess(guessInput, nonce).send({ from: account });
             const won = tx.events?.GuessRevealed?.returnValues?.won === 'true';
             if (won) {
-                fetchGameStats(); // Update jackpot amounts after win
+                await fetchGameStats(); // Update jackpot amounts after win
                 setError("You won! Payout processed. Check your wallet.");
             } else {
                 const hintCountCall = await jackpotContract.methods.hintCount().call();
@@ -2039,7 +2066,7 @@ const App: React.FC = () => {
             }
             setGuessInput('');
             setNonce('');
-        } catch (error) {
+        } catch (error: unknown) {
             console.error("Reveal guess error:", error);
             const errorMessage = error instanceof Error ? error.message : 'Check console.';
             setError(`Failed to reveal guess: ${errorMessage}`);
@@ -2075,23 +2102,23 @@ const App: React.FC = () => {
             await tokenContract.methods.approve(JACKPOT_ADDRESS, cost).send({ from: account });
 
             jackpotContract.events.HintRequested({ filter: { player: account } })
-                .on('data', async (event) => {
-                    const hintIndex = event.returnValues.hintIndex;
+                .on('data', async (event: Web3.EventData) => {
+                    const hintIndex = event.returnValues.hintIndex as string;
                     try {
                         const response = await fetch(`${HINT_API_URL}?index=${hintIndex}&player=${account}`);
                         if (!response.ok) {
                             throw new Error(`HTTP error! Status: ${response.status}`);
                         }
-                        const hintData = await response.json();
+                        const hintData: HintData = await response.json();
                         setHint(`Hint #${hintIndex}: ${hintData.hint}`);
                         setError("Hint retrieved!");
-                    } catch (fetchError) {
+                    } catch (fetchError: unknown) {
                         console.error("Hint fetch error:", fetchError);
                         const errorMessage = fetchError instanceof Error ? fetchError.message : 'Check console.';
                         setError(`Failed to fetch hint #${hintIndex}: ${errorMessage}`);
                     }
                 })
-                .on('error', (error) => {
+                .on('error', (error: Error) => {
                     console.error("Event error:", error);
                     const errorMessage = error instanceof Error ? error.message : 'Check console.';
                     setError(`Failed to receive hint event: ${errorMessage}`);
@@ -2099,8 +2126,8 @@ const App: React.FC = () => {
 
             await jackpotContract.methods.requestHint().send({ from: account });
             setError("Hint requested! Waiting for hint...");
-            fetchGameStats();
-        } catch (error) {
+            await fetchGameStats();
+        } catch (error: unknown) {
             console.error("Request hint error:", error);
             const errorMessage = error instanceof Error ? error.message : 'Check console.';
             setError(`Failed to request hint: ${errorMessage}`);
@@ -2153,7 +2180,7 @@ const App: React.FC = () => {
                 setGuessCost(web3.utils.fromWei(cost, 'mwei'));
                 setTokenBalance(web3.utils.fromWei(balance, 'mwei'));
                 setSplits(split.map(val => Number(val)));
-            } catch (error) {
+            } catch (error: unknown) {
                 console.error("Fetch game stats error:", error);
                 const errorMessage = error instanceof Error ? error.message : 'Check console.';
                 setError(`Failed to fetch game stats: ${errorMessage}`);
@@ -2198,14 +2225,14 @@ const App: React.FC = () => {
                             placeholder="Amount to buy"
                             style={{ margin: '5px', padding: '5px' }}
                             value={buyAmount}
-                            onChange={(e) => setBuyAmount(e.target.value)}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setBuyAmount(e.target.value)}
                         />
                         <button
                             style={{ ...buttonStyle, backgroundColor: '#00ff00', color: '#1a1a2e' }}
-                            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#00ff33')}
-                            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#00ff00')}
-                            onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.95)')}
-                            onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                            onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = '#00ff33')}
+                            onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = '#00ff00')}
+                            onMouseDown={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.transform = 'scale(0.95)')}
+                            onMouseUp={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.transform = 'scale(1)')}
                             onClick={buy100X}
                         >
                             Buy 100X
@@ -2217,14 +2244,14 @@ const App: React.FC = () => {
                             placeholder="Amount to sell"
                             style={{ margin: '5px', padding: '5px' }}
                             value={sellAmount}
-                            onChange={(e) => setSellAmount(e.target.value)}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSellAmount(e.target.value)}
                         />
                         <button
                             style={{ ...buttonStyle, backgroundColor: '#ff0000', color: '#fff' }}
-                            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#ff3333')}
-                            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#ff0000')}
-                            onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.95)')}
-                            onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                            onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = '#ff3333')}
+                            onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = '#ff0000')}
+                            onMouseDown={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.transform = 'scale(0.95)')}
+                            onMouseUp={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.transform = 'scale(1)')}
                             onClick={sell100X}
                         >
                             Sell 100X
@@ -2232,20 +2259,20 @@ const App: React.FC = () => {
                     </div>
                     <button
                         style={{ ...buttonStyle, backgroundColor: '#e94560', color: '#fff' }}
-                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f95570')}
-                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#e94560')}
-                        onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.95)')}
-                        onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                        onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = '#f95570')}
+                        onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = '#e94560')}
+                        onMouseDown={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.transform = 'scale(0.95)')}
+                        onMouseUp={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.transform = 'scale(1)')}
                         onClick={commitGuess}
                     >
                         Guess ({guessCost} 100X)
                     </button>
                     <button
                         style={{ ...buttonStyle, backgroundColor: '#00ffff', color: '#1a1a2e' }}
-                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#00ffcc')}
-                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#00ffff')}
-                        onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.95)')}
-                        onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                        onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = '#00ffcc')}
+                        onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = '#00ffff')}
+                        onMouseDown={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.transform = 'scale(0.95)')}
+                        onMouseUp={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.transform = 'scale(1)')}
                         onClick={requestHint}
                     >
                         Hint
@@ -2255,14 +2282,14 @@ const App: React.FC = () => {
                         placeholder="Enter your guess"
                         style={{ margin: '5px', padding: '5px', width: '200px' }}
                         value={guessInput}
-                        onChange={(e) => setGuessInput(e.target.value)}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setGuessInput(e.target.value)}
                     />
                     <button
                         style={{ ...buttonStyle, backgroundColor: '#ffd700', color: '#1a1a2e' }}
-                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#ffeb3b')}
-                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#ffd700')}
-                        onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.95)')}
-                        onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                        onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = '#ffeb3b')}
+                        onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = '#ffd700')}
+                        onMouseDown={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.transform = 'scale(0.95)')}
+                        onMouseUp={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.transform = 'scale(1)')}
                         onClick={revealGuess}
                     >
                         Reveal Guess
