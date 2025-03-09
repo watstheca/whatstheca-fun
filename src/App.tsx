@@ -1790,7 +1790,8 @@ const App: React.FC = () => {
                                 params: [{ chainId: `0x${parseInt(SONIC_TESTNET_CHAIN_ID).toString(16)}` }],
                             });
                         } catch (switchError) {
-                            if (switchError instanceof Error && switchError.code === 4902) {
+                            const isMetaMaskError = switchError && typeof switchError === 'object' && 'code' in switchError;
+                            if (isMetaMaskError && (switchError as any).code === 4902) {
                                 await window.ethereum.request({
                                     method: 'wallet_addEthereumChain',
                                     params: [{
@@ -1848,7 +1849,8 @@ const App: React.FC = () => {
                             params: [{ chainId: `0x${parseInt(SONIC_TESTNET_CHAIN_ID).toString(16)}` }],
                         });
                     } catch (switchError) {
-                        if (switchError instanceof Error && switchError.code === 4902) {
+                        const isMetaMaskError = switchError && typeof switchError === 'object' && 'code' in switchError;
+                        if (isMetaMaskError && (switchError as any).code === 4902) {
                             await window.ethereum.request({
                                 method: 'wallet_addEthereumChain',
                                 params: [{
@@ -2145,7 +2147,7 @@ const App: React.FC = () => {
                 const split = splitCall as [string, string, string, string];
 
                 setTotalGuesses(parseInt(guesses));
-                setJackpotAmount(web3.utils.fromWei(jacket, 'ether'));
+                setJackpotAmount(web3.utils.fromWei(jackpot, 'ether'));
                 setNextJackpotAmount(web3.utils.fromWei(nextJackpot, 'ether'));
                 setPlayerGuesses(parseInt(player));
                 setGuessCost(web3.utils.fromWei(cost, 'mwei'));
