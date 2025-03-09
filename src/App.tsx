@@ -1,93 +1,44 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Web3 from 'web3';
+import { Contract } from 'web3-eth-contract';
 import './styles.css';
 
-interface HintRequestedEvent {
-    returnValues: {
-        player: string;
-        hintIndex: string;
-    };
-    event: string;
-    signature: string;
-    raw: {
-        data: string;
-        topics: string[];
-    };
-}
+// Constants
+const JACKPOT_ADDRESS = '0x5D1c6D024B38666FBf0D2205722288Dd857AB6Fb';
+const TOKEN_ADDRESS = '0x0388c8502CA45f04fA5f67a4596fE727c80290C5';
+const BONDING_CURVE_ADDRESS = '0x31Ef1dF550F44FEc3c0285847Ccf8b2a1bc794Cc';
+const SONIC_TESTNET_CHAIN_ID = '57054';
+const SONIC_TESTNET_RPC_URL = 'https://rpc.blaze.soniclabs.com';
+const HINT_API_URL = 'https://whatstheca.fun/.netlify/functions/get-hint';
 
+// ABIs (from your provided document)
 const jackpotGameABI = [
   {
     "inputs": [
-      {
-        "internalType": "address",
-        "name": "_gameToken",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "_bondingCurve",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "_marketingWallet",
-        "type": "address"
-      }
+      { "internalType": "address", "name": "_gameToken", "type": "address" },
+      { "internalType": "address", "name": "_bondingCurve", "type": "address" },
+      { "internalType": "address", "name": "_marketingWallet", "type": "address" }
     ],
     "stateMutability": "nonpayable",
     "type": "constructor"
   },
-  {
-    "inputs": [],
-    "name": "AccessControlBadConfirmation",
-    "type": "error"
-  },
+  { "inputs": [], "name": "AccessControlBadConfirmation", "type": "error" },
   {
     "inputs": [
-      {
-        "internalType": "address",
-        "name": "account",
-        "type": "address"
-      },
-      {
-        "internalType": "bytes32",
-        "name": "neededRole",
-        "type": "bytes32"
-      }
+      { "internalType": "address", "name": "account", "type": "address" },
+      { "internalType": "bytes32", "name": "neededRole", "type": "bytes32" }
     ],
     "name": "AccessControlUnauthorizedAccount",
     "type": "error"
   },
-  {
-    "inputs": [],
-    "name": "EnforcedPause",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "ExpectedPause",
-    "type": "error"
-  },
-  {
-    "inputs": [],
-    "name": "ReentrancyGuardReentrantCall",
-    "type": "error"
-  },
+  { "inputs": [], "name": "EnforcedPause", "type": "error" },
+  { "inputs": [], "name": "ExpectedPause", "type": "error" },
+  { "inputs": [], "name": "ReentrancyGuardReentrantCall", "type": "error" },
   {
     "anonymous": false,
     "inputs": [
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "total100X",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "sReceived",
-        "type": "uint256"
-      }
+      { "indexed": false, "internalType": "uint256", "name": "total100X", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "sReceived", "type": "uint256" }
     ],
     "name": "BatchProcessed",
     "type": "event"
@@ -95,43 +46,18 @@ const jackpotGameABI = [
   {
     "anonymous": false,
     "inputs": [
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "newCurve",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "requestTime",
-        "type": "uint256"
-      }
+      { "indexed": false, "internalType": "address", "name": "newCurve", "type": "address" },
+      { "indexed": false, "internalType": "uint256", "name": "requestTime", "type": "uint256" }
     ],
     "name": "BondingCurveChangeRequested",
     "type": "event"
   },
-  {
-    "anonymous": false,
-    "inputs": [],
-    "name": "ChangeCancelled",
-    "type": "event"
-  },
+  { "anonymous": false, "inputs": [], "name": "ChangeCancelled", "type": "event" },
   {
     "anonymous": false,
     "inputs": [
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "newGameToken",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "newBondingCurve",
-        "type": "address"
-      }
+      { "indexed": false, "internalType": "address", "name": "newGameToken", "type": "address" },
+      { "indexed": false, "internalType": "address", "name": "newBondingCurve", "type": "address" }
     ],
     "name": "ChangeExecuted",
     "type": "event"
@@ -139,18 +65,8 @@ const jackpotGameABI = [
   {
     "anonymous": false,
     "inputs": [
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "newGuessCost",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "newHintCost",
-        "type": "uint256"
-      }
+      { "indexed": false, "internalType": "uint256", "name": "newGuessCost", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "newHintCost", "type": "uint256" }
     ],
     "name": "CostsUpdated",
     "type": "event"
@@ -158,12 +74,7 @@ const jackpotGameABI = [
   {
     "anonymous": false,
     "inputs": [
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "newAgent",
-        "type": "address"
-      }
+      { "indexed": false, "internalType": "address", "name": "newAgent", "type": "address" }
     ],
     "name": "DefaiAgentUpdated",
     "type": "event"
@@ -171,18 +82,8 @@ const jackpotGameABI = [
   {
     "anonymous": false,
     "inputs": [
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "newToken",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "requestTime",
-        "type": "uint256"
-      }
+      { "indexed": false, "internalType": "address", "name": "newToken", "type": "address" },
+      { "indexed": false, "internalType": "uint256", "name": "requestTime", "type": "uint256" }
     ],
     "name": "GameTokenChangeRequested",
     "type": "event"
@@ -190,12 +91,7 @@ const jackpotGameABI = [
   {
     "anonymous": false,
     "inputs": [
-      {
-        "indexed": false,
-        "internalType": "string",
-        "name": "message",
-        "type": "string"
-      }
+      { "indexed": false, "internalType": "string", "name": "message", "type": "string" }
     ],
     "name": "GameUpdate",
     "type": "event"
@@ -203,18 +99,8 @@ const jackpotGameABI = [
   {
     "anonymous": false,
     "inputs": [
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "player",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "bytes32",
-        "name": "commitment",
-        "type": "bytes32"
-      }
+      { "indexed": true, "internalType": "address", "name": "player", "type": "address" },
+      { "indexed": false, "internalType": "bytes32", "name": "commitment", "type": "bytes32" }
     ],
     "name": "GuessCommitted",
     "type": "event"
@@ -222,24 +108,9 @@ const jackpotGameABI = [
   {
     "anonymous": false,
     "inputs": [
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "player",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "string",
-        "name": "guess",
-        "type": "string"
-      },
-      {
-        "indexed": false,
-        "internalType": "bool",
-        "name": "won",
-        "type": "bool"
-      }
+      { "indexed": true, "internalType": "address", "name": "player", "type": "address" },
+      { "indexed": false, "internalType": "string", "name": "guess", "type": "string" },
+      { "indexed": false, "internalType": "bool", "name": "won", "type": "bool" }
     ],
     "name": "GuessRevealed",
     "type": "event"
@@ -247,12 +118,8 @@ const jackpotGameABI = [
   {
     "anonymous": false,
     "inputs": [
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "index",
-        "type": "uint256"
-      }
+      { "indexed": false, "internalType": "uint256", "name": "index", "type": "uint256" },
+      { "indexed": false, "internalType": "string", "name": "hint", "type": "string" }
     ],
     "name": "HintAdded",
     "type": "event"
@@ -260,18 +127,8 @@ const jackpotGameABI = [
   {
     "anonymous": false,
     "inputs": [
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "player",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "hintIndex",
-        "type": "uint256"
-      }
+      { "indexed": true, "internalType": "address", "name": "player", "type": "address" },
+      { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" }
     ],
     "name": "HintRequested",
     "type": "event"
@@ -279,25 +136,7 @@ const jackpotGameABI = [
   {
     "anonymous": false,
     "inputs": [
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      }
-    ],
-    "name": "JackpotFunded",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "newWallet",
-        "type": "address"
-      }
+      { "indexed": false, "internalType": "address", "name": "newWallet", "type": "address" }
     ],
     "name": "MarketingWalletUpdated",
     "type": "event"
@@ -305,12 +144,7 @@ const jackpotGameABI = [
   {
     "anonymous": false,
     "inputs": [
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "account",
-        "type": "address"
-      }
+      { "indexed": false, "internalType": "address", "name": "account", "type": "address" }
     ],
     "name": "Paused",
     "type": "event"
@@ -318,12 +152,7 @@ const jackpotGameABI = [
   {
     "anonymous": false,
     "inputs": [
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "newDelay",
-        "type": "uint256"
-      }
+      { "indexed": false, "internalType": "uint256", "name": "newDelay", "type": "uint256" }
     ],
     "name": "RevealDelayUpdated",
     "type": "event"
@@ -331,24 +160,9 @@ const jackpotGameABI = [
   {
     "anonymous": false,
     "inputs": [
-      {
-        "indexed": true,
-        "internalType": "bytes32",
-        "name": "role",
-        "type": "bytes32"
-      },
-      {
-        "indexed": true,
-        "internalType": "bytes32",
-        "name": "previousAdminRole",
-        "type": "bytes32"
-      },
-      {
-        "indexed": true,
-        "internalType": "bytes32",
-        "name": "newAdminRole",
-        "type": "bytes32"
-      }
+      { "indexed": true, "internalType": "bytes32", "name": "role", "type": "bytes32" },
+      { "indexed": true, "internalType": "bytes32", "name": "previousAdminRole", "type": "bytes32" },
+      { "indexed": true, "internalType": "bytes32", "name": "newAdminRole", "type": "bytes32" }
     ],
     "name": "RoleAdminChanged",
     "type": "event"
@@ -356,24 +170,9 @@ const jackpotGameABI = [
   {
     "anonymous": false,
     "inputs": [
-      {
-        "indexed": true,
-        "internalType": "bytes32",
-        "name": "role",
-        "type": "bytes32"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "account",
-        "type": "address"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "sender",
-        "type": "address"
-      }
+      { "indexed": true, "internalType": "bytes32", "name": "role", "type": "bytes32" },
+      { "indexed": true, "internalType": "address", "name": "account", "type": "address" },
+      { "indexed": true, "internalType": "address", "name": "sender", "type": "address" }
     ],
     "name": "RoleGranted",
     "type": "event"
@@ -381,24 +180,9 @@ const jackpotGameABI = [
   {
     "anonymous": false,
     "inputs": [
-      {
-        "indexed": true,
-        "internalType": "bytes32",
-        "name": "role",
-        "type": "bytes32"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "account",
-        "type": "address"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "sender",
-        "type": "address"
-      }
+      { "indexed": true, "internalType": "bytes32", "name": "role", "type": "bytes32" },
+      { "indexed": true, "internalType": "address", "name": "account", "type": "address" },
+      { "indexed": true, "internalType": "address", "name": "sender", "type": "address" }
     ],
     "name": "RoleRevoked",
     "type": "event"
@@ -406,12 +190,7 @@ const jackpotGameABI = [
   {
     "anonymous": false,
     "inputs": [
-      {
-        "indexed": false,
-        "internalType": "bytes32",
-        "name": "hashedSecret",
-        "type": "bytes32"
-      }
+      { "indexed": false, "internalType": "bytes32", "name": "hashedSecret", "type": "bytes32" }
     ],
     "name": "SecretHashSet",
     "type": "event"
@@ -419,30 +198,10 @@ const jackpotGameABI = [
   {
     "anonymous": false,
     "inputs": [
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "burn",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "jackpot",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "next",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "marketing",
-        "type": "uint256"
-      }
+      { "indexed": false, "internalType": "uint256", "name": "burn", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "jackpot", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "next", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "marketing", "type": "uint256" }
     ],
     "name": "SplitUpdated",
     "type": "event"
@@ -450,12 +209,7 @@ const jackpotGameABI = [
   {
     "anonymous": false,
     "inputs": [
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "account",
-        "type": "address"
-      }
+      { "indexed": false, "internalType": "address", "name": "account", "type": "address" }
     ],
     "name": "Unpaused",
     "type": "event"
@@ -463,57 +217,33 @@ const jackpotGameABI = [
   {
     "inputs": [],
     "name": "CHANGE_DELAY",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
   },
   {
     "inputs": [],
     "name": "DEFAULT_ADMIN_ROLE",
-    "outputs": [
-      {
-        "internalType": "bytes32",
-        "name": "",
-        "type": "bytes32"
-      }
-    ],
+    "outputs": [{ "internalType": "bytes32", "name": "", "type": "bytes32" }],
     "stateMutability": "view",
     "type": "function"
   },
   {
     "inputs": [],
     "name": "PASSWORD_SETTER_ROLE",
-    "outputs": [
-      {
-        "internalType": "bytes32",
-        "name": "",
-        "type": "bytes32"
-      }
-    ],
+    "outputs": [{ "internalType": "bytes32", "name": "", "type": "bytes32" }],
     "stateMutability": "view",
     "type": "function"
   },
   {
     "inputs": [],
     "name": "accumulated100X",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
   },
   {
-    "inputs": [],
+    "inputs": [{ "internalType": "string", "name": "_hint", "type": "string" }],
     "name": "addHint",
     "outputs": [],
     "stateMutability": "nonpayable",
@@ -522,39 +252,21 @@ const jackpotGameABI = [
   {
     "inputs": [],
     "name": "batchInterval",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
   },
   {
     "inputs": [],
     "name": "bondingCurve",
-    "outputs": [
-      {
-        "internalType": "contract IBondingCurve",
-        "name": "",
-        "type": "address"
-      }
-    ],
+    "outputs": [{ "internalType": "contract IBondingCurve", "name": "", "type": "address" }],
     "stateMutability": "view",
     "type": "function"
   },
   {
     "inputs": [],
     "name": "burnPercent",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
   },
@@ -569,102 +281,44 @@ const jackpotGameABI = [
     "inputs": [],
     "name": "changeRequest",
     "outputs": [
-      {
-        "internalType": "address",
-        "name": "newGameToken",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "newBondingCurve",
-        "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "requestTime",
-        "type": "uint256"
-      },
-      {
-        "internalType": "bool",
-        "name": "active",
-        "type": "bool"
-      }
+      { "internalType": "address", "name": "newGameToken", "type": "address" },
+      { "internalType": "address", "name": "newBondingCurve", "type": "address" },
+      { "internalType": "uint256", "name": "requestTime", "type": "uint256" },
+      { "internalType": "bool", "name": "active", "type": "bool" }
     ],
     "stateMutability": "view",
     "type": "function"
   },
   {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
+    "inputs": [{ "internalType": "address", "name": "", "type": "address" }],
     "name": "commitBlocks",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
   },
   {
-    "inputs": [
-      {
-        "internalType": "bytes32",
-        "name": "_commitment",
-        "type": "bytes32"
-      }
-    ],
+    "inputs": [{ "internalType": "bytes32", "name": "_commitment", "type": "bytes32" }],
     "name": "commitGuess",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
   },
   {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
+    "inputs": [{ "internalType": "address", "name": "", "type": "address" }],
     "name": "commitments",
-    "outputs": [
-      {
-        "internalType": "bytes32",
-        "name": "",
-        "type": "bytes32"
-      }
-    ],
+    "outputs": [{ "internalType": "bytes32", "name": "", "type": "bytes32" }],
     "stateMutability": "view",
     "type": "function"
   },
   {
     "inputs": [],
     "name": "defaiAgent",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
     "stateMutability": "view",
     "type": "function"
   },
   {
-    "inputs": [
-      {
-        "internalType": "string",
-        "name": "_message",
-        "type": "string"
-      }
-    ],
+    "inputs": [{ "internalType": "string", "name": "_message", "type": "string" }],
     "name": "emitGameUpdate",
     "outputs": [],
     "stateMutability": "nonpayable",
@@ -679,40 +333,22 @@ const jackpotGameABI = [
   },
   {
     "inputs": [],
-    "name": "fundJackpot",
-    "outputs": [],
-    "stateMutability": "payable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
     "name": "gameToken",
-    "outputs": [
-      {
-        "internalType": "contract IERC20",
-        "name": "",
-        "type": "address"
-      }
-    ],
+    "outputs": [{ "internalType": "contract IERC20", "name": "", "type": "address" }],
     "stateMutability": "view",
     "type": "function"
   },
   {
-    "inputs": [
-      {
-        "internalType": "bytes32",
-        "name": "role",
-        "type": "bytes32"
-      }
-    ],
+    "inputs": [],
+    "name": "getHintCount",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "bytes32", "name": "role", "type": "bytes32" }],
     "name": "getRoleAdmin",
-    "outputs": [
-      {
-        "internalType": "bytes32",
-        "name": "",
-        "type": "bytes32"
-      }
-    ],
+    "outputs": [{ "internalType": "bytes32", "name": "", "type": "bytes32" }],
     "stateMutability": "view",
     "type": "function"
   },
@@ -720,42 +356,18 @@ const jackpotGameABI = [
     "inputs": [],
     "name": "getSplit",
     "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
+      { "internalType": "uint256", "name": "", "type": "uint256" },
+      { "internalType": "uint256", "name": "", "type": "uint256" },
+      { "internalType": "uint256", "name": "", "type": "uint256" },
+      { "internalType": "uint256", "name": "", "type": "uint256" }
     ],
     "stateMutability": "view",
     "type": "function"
   },
   {
     "inputs": [
-      {
-        "internalType": "bytes32",
-        "name": "role",
-        "type": "bytes32"
-      },
-      {
-        "internalType": "address",
-        "name": "account",
-        "type": "address"
-      }
+      { "internalType": "bytes32", "name": "role", "type": "bytes32" },
+      { "internalType": "address", "name": "account", "type": "address" }
     ],
     "name": "grantRole",
     "outputs": [],
@@ -765,154 +377,80 @@ const jackpotGameABI = [
   {
     "inputs": [],
     "name": "guessCost",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
   },
   {
     "inputs": [
-      {
-        "internalType": "bytes32",
-        "name": "role",
-        "type": "bytes32"
-      },
-      {
-        "internalType": "address",
-        "name": "account",
-        "type": "address"
-      }
+      { "internalType": "bytes32", "name": "role", "type": "bytes32" },
+      { "internalType": "address", "name": "account", "type": "address" }
     ],
     "name": "hasRole",
-    "outputs": [
-      {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
-    ],
+    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
     "stateMutability": "view",
     "type": "function"
   },
   {
     "inputs": [],
     "name": "hintCost",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "hintCount",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
+    "inputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "name": "hints",
+    "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
     "stateMutability": "view",
     "type": "function"
   },
   {
     "inputs": [],
     "name": "jackpotAmount",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
   },
   {
     "inputs": [],
     "name": "jackpotPercent",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
   },
   {
     "inputs": [],
     "name": "lastBatchTime",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
   },
   {
     "inputs": [],
     "name": "marketingPercent",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
   },
   {
     "inputs": [],
     "name": "marketingWallet",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
     "stateMutability": "view",
     "type": "function"
   },
   {
     "inputs": [],
     "name": "nextJackpotAmount",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
   },
   {
     "inputs": [],
     "name": "nextJackpotPercent",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
   },
@@ -926,47 +464,21 @@ const jackpotGameABI = [
   {
     "inputs": [],
     "name": "paused",
-    "outputs": [
-      {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
-    ],
+    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
     "stateMutability": "view",
     "type": "function"
   },
   {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
+    "inputs": [{ "internalType": "address", "name": "", "type": "address" }],
     "name": "playerGuesses",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
   },
   {
     "inputs": [
-      {
-        "internalType": "bytes32",
-        "name": "role",
-        "type": "bytes32"
-      },
-      {
-        "internalType": "address",
-        "name": "callerConfirmation",
-        "type": "address"
-      }
+      { "internalType": "bytes32", "name": "role", "type": "bytes32" },
+      { "internalType": "address", "name": "callerConfirmation", "type": "address" }
     ],
     "name": "renounceRole",
     "outputs": [],
@@ -974,26 +486,14 @@ const jackpotGameABI = [
     "type": "function"
   },
   {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "_newCurve",
-        "type": "address"
-      }
-    ],
+    "inputs": [{ "internalType": "address", "name": "_newCurve", "type": "address" }],
     "name": "requestBondingCurveChange",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
   },
   {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "_newToken",
-        "type": "address"
-      }
-    ],
+    "inputs": [{ "internalType": "address", "name": "_newToken", "type": "address" }],
     "name": "requestGameTokenChange",
     "outputs": [],
     "stateMutability": "nonpayable",
@@ -1009,28 +509,14 @@ const jackpotGameABI = [
   {
     "inputs": [],
     "name": "revealDelay",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
   },
   {
     "inputs": [
-      {
-        "internalType": "string",
-        "name": "_guess",
-        "type": "string"
-      },
-      {
-        "internalType": "bytes32",
-        "name": "_nonce",
-        "type": "bytes32"
-      }
+      { "internalType": "string", "name": "_guess", "type": "string" },
+      { "internalType": "bytes32", "name": "_nonce", "type": "bytes32" }
     ],
     "name": "revealGuess",
     "outputs": [],
@@ -1039,16 +525,8 @@ const jackpotGameABI = [
   },
   {
     "inputs": [
-      {
-        "internalType": "bytes32",
-        "name": "role",
-        "type": "bytes32"
-      },
-      {
-        "internalType": "address",
-        "name": "account",
-        "type": "address"
-      }
+      { "internalType": "bytes32", "name": "role", "type": "bytes32" },
+      { "internalType": "address", "name": "account", "type": "address" }
     ],
     "name": "revokeRole",
     "outputs": [],
@@ -1058,37 +536,19 @@ const jackpotGameABI = [
   {
     "inputs": [],
     "name": "salt",
-    "outputs": [
-      {
-        "internalType": "bytes32",
-        "name": "",
-        "type": "bytes32"
-      }
-    ],
+    "outputs": [{ "internalType": "bytes32", "name": "", "type": "bytes32" }],
     "stateMutability": "view",
     "type": "function"
   },
   {
     "inputs": [],
     "name": "secretHash",
-    "outputs": [
-      {
-        "internalType": "bytes32",
-        "name": "",
-        "type": "bytes32"
-      }
-    ],
+    "outputs": [{ "internalType": "bytes32", "name": "", "type": "bytes32" }],
     "stateMutability": "view",
     "type": "function"
   },
   {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "_minutes",
-        "type": "uint256"
-      }
-    ],
+    "inputs": [{ "internalType": "uint256", "name": "_minutes", "type": "uint256" }],
     "name": "setBatchInterval",
     "outputs": [],
     "stateMutability": "nonpayable",
@@ -1096,16 +556,8 @@ const jackpotGameABI = [
   },
   {
     "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "_guessCost",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "_hintCost",
-        "type": "uint256"
-      }
+      { "internalType": "uint256", "name": "_guessCost", "type": "uint256" },
+      { "internalType": "uint256", "name": "_hintCost", "type": "uint256" }
     ],
     "name": "setCosts",
     "outputs": [],
@@ -1113,39 +565,21 @@ const jackpotGameABI = [
     "type": "function"
   },
   {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "_agent",
-        "type": "address"
-      }
-    ],
+    "inputs": [{ "internalType": "address", "name": "_agent", "type": "address" }],
     "name": "setDefaiAgent",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
   },
   {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "_newWallet",
-        "type": "address"
-      }
-    ],
+    "inputs": [{ "internalType": "address", "name": "_newWallet", "type": "address" }],
     "name": "setMarketingWallet",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
   },
   {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "_newDelay",
-        "type": "uint256"
-      }
-    ],
+    "inputs": [{ "internalType": "uint256", "name": "_newDelay", "type": "uint256" }],
     "name": "setRevealDelay",
     "outputs": [],
     "stateMutability": "nonpayable",
@@ -1153,16 +587,8 @@ const jackpotGameABI = [
   },
   {
     "inputs": [
-      {
-        "internalType": "bytes32",
-        "name": "_hashedSecret",
-        "type": "bytes32"
-      },
-      {
-        "internalType": "bytes32",
-        "name": "_newSalt",
-        "type": "bytes32"
-      }
+      { "internalType": "bytes32", "name": "_hashedSecret", "type": "bytes32" },
+      { "internalType": "bytes32", "name": "_newSalt", "type": "bytes32" }
     ],
     "name": "setSecretHash",
     "outputs": [],
@@ -1170,34 +596,16 @@ const jackpotGameABI = [
     "type": "function"
   },
   {
-    "inputs": [
-      {
-        "internalType": "bytes4",
-        "name": "interfaceId",
-        "type": "bytes4"
-      }
-    ],
+    "inputs": [{ "internalType": "bytes4", "name": "interfaceId", "type": "bytes4" }],
     "name": "supportsInterface",
-    "outputs": [
-      {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
-    ],
+    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
     "stateMutability": "view",
     "type": "function"
   },
   {
     "inputs": [],
     "name": "totalGuesses",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
   },
@@ -1210,26 +618,10 @@ const jackpotGameABI = [
   },
   {
     "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "_burn",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "_jackpot",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "_next",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "_marketing",
-        "type": "uint256"
-      }
+      { "internalType": "uint256", "name": "_burn", "type": "uint256" },
+      { "internalType": "uint256", "name": "_jackpot", "type": "uint256" },
+      { "internalType": "uint256", "name": "_next", "type": "uint256" },
+      { "internalType": "uint256", "name": "_marketing", "type": "uint256" }
     ],
     "name": "updateSplit",
     "outputs": [],
@@ -1238,530 +630,511 @@ const jackpotGameABI = [
   },
   {
     "inputs": [
-      {
-        "internalType": "address",
-        "name": "to",
-        "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      }
+      { "internalType": "address", "name": "to", "type": "address" },
+      { "internalType": "uint256", "name": "amount", "type": "uint256" }
     ],
     "name": "withdrawJackpot",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
   },
-  {
-    "stateMutability": "payable",
-    "type": "receive"
-  }
+  { "stateMutability": "payable", "type": "receive" }
 ];
 
 const token100xABI = [
-    {
-      "inputs": [],
-      "stateMutability": "nonpayable",
-      "type": "constructor"
-    },
-    {
-      "inputs": [
-        { "internalType": "address", "name": "spender", "type": "address" },
-        { "internalType": "uint256", "name": "allowance", "type": "uint256" },
-        { "internalType": "uint256", "name": "needed", "type": "uint256" }
-      ],
-      "name": "ERC20InsufficientAllowance",
-      "type": "error"
-    },
-    {
-      "inputs": [
-        { "internalType": "address", "name": "sender", "type": "address" },
-        { "internalType": "uint256", "name": "balance", "type": "uint256" },
-        { "internalType": "uint256", "name": "needed", "type": "uint256" }
-      ],
-      "name": "ERC20InsufficientBalance",
-      "type": "error"
-    },
-    {
-      "inputs": [{ "internalType": "address", "name": "approver", "type": "address" }],
-      "name": "ERC20InvalidApprover",
-      "type": "error"
-    },
-    {
-      "inputs": [{ "internalType": "address", "name": "receiver", "type": "address" }],
-      "name": "ERC20InvalidReceiver",
-      "type": "error"
-    },
-    {
-      "inputs": [{ "internalType": "address", "name": "sender", "type": "address" }],
-      "name": "ERC20InvalidSender",
-      "type": "error"
-    },
-    {
-      "inputs": [{ "internalType": "address", "name": "spender", "type": "address" }],
-      "name": "ERC20InvalidSpender",
-      "type": "error"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        { "indexed": true, "internalType": "address", "name": "owner", "type": "address" },
-        { "indexed": true, "internalType": "address", "name": "spender", "type": "address" },
-        { "internalType": "uint256", "name": "value", "type": "uint256" }
-      ],
-      "name": "Approval",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        { "indexed": true, "internalType": "address", "name": "from", "type": "address" },
-        { "indexed": true, "internalType": "address", "name": "to", "type": "address" },
-        { "internalType": "uint256", "name": "value", "type": "uint256" }
-      ],
-      "name": "Transfer",
-      "type": "event"
-    },
-    {
-      "inputs": [
-        { "internalType": "address", "name": "owner", "type": "address" },
-        { "internalType": "address", "name": "spender", "type": "address" }
-      ],
-      "name": "allowance",
-      "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        { "internalType": "address", "name": "spender", "type": "address" },
-        { "internalType": "uint256", "name": "value", "type": "uint256" }
-      ],
-      "name": "approve",
-      "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [{ "internalType": "address", "name": "account", "type": "address" }],
-      "name": "balanceOf",
-      "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [{ "internalType": "uint256", "name": "amount", "type": "uint256" }],
-      "name": "burn",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "decimals",
-      "outputs": [{ "internalType": "uint8", "name": "", "type": "uint8" }],
-      "stateMutability": "pure",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "name",
-      "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "symbol",
-      "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "totalSupply",
-      "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        { "internalType": "address", "name": "to", "type": "address" },
-        { "internalType": "uint256", "name": "value", "type": "uint256" }
-      ],
-      "name": "transfer",
-      "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        { "internalType": "address", "name": "from", "type": "address" },
-        { "internalType": "address", "name": "to", "type": "address" },
-        { "internalType": "uint256", "name": "value", "type": "uint256" }
-      ],
-      "name": "transferFrom",
-      "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    }
+  {
+    "inputs": [],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "spender", "type": "address" },
+      { "internalType": "uint256", "name": "allowance", "type": "uint256" },
+      { "internalType": "uint256", "name": "needed", "type": "uint256" }
+    ],
+    "name": "ERC20InsufficientAllowance",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "sender", "type": "address" },
+      { "internalType": "uint256", "name": "balance", "type": "uint256" },
+      { "internalType": "uint256", "name": "needed", "type": "uint256" }
+    ],
+    "name": "ERC20InsufficientBalance",
+    "type": "error"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "approver", "type": "address" }],
+    "name": "ERC20InvalidApprover",
+    "type": "error"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "receiver", "type": "address" }],
+    "name": "ERC20InvalidReceiver",
+    "type": "error"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "sender", "type": "address" }],
+    "name": "ERC20InvalidSender",
+    "type": "error"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "spender", "type": "address" }],
+    "name": "ERC20InvalidSpender",
+    "type": "error"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "address", "name": "owner", "type": "address" },
+      { "indexed": true, "internalType": "address", "name": "spender", "type": "address" },
+      { "internalType": "uint256", "name": "value", "type": "uint256" }
+    ],
+    "name": "Approval",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "address", "name": "from", "type": "address" },
+      { "indexed": true, "internalType": "address", "name": "to", "type": "address" },
+      { "internalType": "uint256", "name": "value", "type": "uint256" }
+    ],
+    "name": "Transfer",
+    "type": "event"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "owner", "type": "address" },
+      { "internalType": "address", "name": "spender", "type": "address" }
+    ],
+    "name": "allowance",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "spender", "type": "address" },
+      { "internalType": "uint256", "name": "value", "type": "uint256" }
+    ],
+    "name": "approve",
+    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "account", "type": "address" }],
+    "name": "balanceOf",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "amount", "type": "uint256" }],
+    "name": "burn",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "decimals",
+    "outputs": [{ "internalType": "uint8", "name": "", "type": "uint8" }],
+    "stateMutability": "pure",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "name",
+    "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "symbol",
+    "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "totalSupply",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "to", "type": "address" },
+      { "internalType": "uint256", "name": "value", "type": "uint256" }
+    ],
+    "name": "transfer",
+    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "from", "type": "address" },
+      { "internalType": "address", "name": "to", "type": "address" },
+      { "internalType": "uint256", "name": "value", "type": "uint256" }
+    ],
+    "name": "transferFrom",
+    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
 ];
 
 const bondingCurveABI = [
-    {
-      "inputs": [{ "internalType": "address", "name": "_token100x", "type": "address" }],
-      "stateMutability": "nonpayable",
-      "type": "constructor"
-    },
-    { "inputs": [], "name": "EnforcedPause", "type": "error" },
-    { "inputs": [], "name": "ExpectedPause", "type": "error" },
-    {
-      "inputs": [{ "internalType": "address", "name": "owner", "type": "address" }],
-      "name": "OwnableInvalidOwner",
-      "type": "error"
-    },
-    {
-      "inputs": [{ "internalType": "address", "name": "account", "type": "address" }],
-      "name": "OwnableUnauthorizedAccount",
-      "type": "error"
-    },
-    { "inputs": [], "name": "ReentrancyGuardReentrantCall", "type": "error" },
-    {
-      "anonymous": false,
-      "inputs": [
-        { "indexed": true, "internalType": "address", "name": "buyer", "type": "address" },
-        { "internalType": "uint256", "name": "tokenAmount", "type": "uint256" },
-        { "internalType": "uint256", "name": "sPaid", "type": "uint256" }
-      ],
-      "name": "Buy",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        { "internalType": "uint256", "name": "tokenAmount", "type": "uint256" },
-        { "internalType": "uint256", "name": "sAmount", "type": "uint256" }
-      ],
-      "name": "FullTimelockWithdrawExecuted",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        { "internalType": "uint256", "name": "tokenAmount", "type": "uint256" },
-        { "internalType": "uint256", "name": "sAmount", "type": "uint256" },
-        { "internalType": "uint256", "name": "requestTime", "type": "uint256" }
-      ],
-      "name": "FullTimelockWithdrawRequested",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [{ "internalType": "uint256", "name": "newPrice", "type": "uint256" }],
-      "name": "InitialPriceUpdated",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        { "indexed": true, "internalType": "address", "name": "previousOwner", "type": "address" },
-        { "indexed": true, "internalType": "address", "name": "newOwner", "type": "address" }
-      ],
-      "name": "OwnershipTransferred",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [{ "internalType": "address", "name": "account", "type": "address" }],
-      "name": "Paused",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [{ "internalType": "uint256", "name": "newIncrease", "type": "uint256" }],
-      "name": "PriceIncreaseUpdated",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        { "indexed": true, "internalType": "address", "name": "seller", "type": "address" },
-        { "internalType": "uint256", "name": "tokenAmount", "type": "uint256" },
-        { "internalType": "uint256", "name": "sReceived", "type": "uint256" }
-      ],
-      "name": "Sell",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [{ "internalType": "uint256", "name": "newFee", "type": "uint256" }],
-      "name": "SellFeeUpdated",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        { "indexed": true, "internalType": "address", "name": "pool", "type": "address" },
-        { "internalType": "uint256", "name": "tokenAmount", "type": "uint256" },
-        { "internalType": "uint256", "name": "sAmount", "type": "uint256" }
-      ],
-      "name": "SentToLiquidityPool",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        { "internalType": "uint256", "name": "totalBought", "type": "uint256" },
-        { "internalType": "uint256", "name": "totalSoldBack", "type": "uint256" }
-      ],
-      "name": "ThresholdReached",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [{ "internalType": "uint256", "name": "amount", "type": "uint256" }],
-      "name": "TokenTransferred",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [{ "internalType": "address", "name": "account", "type": "address" }],
-      "name": "Unpaused",
-      "type": "event"
-    },
-    {
-      "inputs": [],
-      "name": "MAX_TOKEN_AMOUNT_PER_TX",
-      "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "THRESHOLD",
-      "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "WITHDRAW_DELAY",
-      "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [{ "internalType": "address", "name": "", "type": "address" }],
-      "name": "balances",
-      "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [{ "internalType": "uint256", "name": "tokenAmount", "type": "uint256" }],
-      "name": "buy",
-      "outputs": [],
-      "stateMutability": "payable",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "cancelFullWithdraw",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "executeFullTimelockWithdraw",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "fullTimelockWithdraw",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "getPoolS",
-      "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "initialPrice",
-      "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "jackpotAddress",
-      "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "owner",
-      "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "pause",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "paused",
-      "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "poolS",
-      "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "priceIncrease",
-      "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "renounceOwnership",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [{ "internalType": "uint256", "name": "tokenAmount", "type": "uint256" }],
-      "name": "sell",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "sellFee",
-      "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        { "internalType": "address", "name": "pool", "type": "address" },
-        { "internalType": "uint256", "name": "tokenAmount", "type": "uint256" },
-        { "internalType": "uint256", "name": "sAmount", "type": "uint256" }
-      ],
-      "name": "sendToLiquidityPool",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [{ "internalType": "uint256", "name": "_newPrice", "type": "uint256" }],
-      "name": "setInitialPrice",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [{ "internalType": "address", "name": "_jackpotAddress", "type": "address" }],
-      "name": "setJackpotAddress",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [{ "internalType": "uint256", "name": "_newIncrease", "type": "uint256" }],
-      "name": "setPriceIncrease",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [{ "internalType": "uint256", "name": "_fee", "type": "uint256" }],
-      "name": "setSellFee",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "token100x",
-      "outputs": [{ "internalType": "contract IERC20", "name": "", "type": "address" }],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "totalBought",
-      "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "totalSoldBack",
-      "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [{ "internalType": "address", "name": "newOwner", "type": "address" }],
-      "name": "transferOwnership",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "unpause",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "withdrawRequest",
-      "outputs": [
-        { "internalType": "uint256", "name": "tokenAmount", "type": "uint256" },
-        { "internalType": "uint256", "name": "sAmount", "type": "uint256" },
-        { "internalType": "uint256", "name": "requestTime", "type": "uint256" },
-        { "internalType": "bool", "name": "active", "type": "bool" }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    { "stateMutability": "payable", "type": "receive" }
+  {
+    "inputs": [{ "internalType": "address", "name": "_token100x", "type": "address" }],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  { "inputs": [], "name": "EnforcedPause", "type": "error" },
+  { "inputs": [], "name": "ExpectedPause", "type": "error" },
+  {
+    "inputs": [{ "internalType": "address", "name": "owner", "type": "address" }],
+    "name": "OwnableInvalidOwner",
+    "type": "error"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "account", "type": "address" }],
+    "name": "OwnableUnauthorizedAccount",
+    "type": "error"
+  },
+  { "inputs": [], "name": "ReentrancyGuardReentrantCall", "type": "error" },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "address", "name": "buyer", "type": "address" },
+      { "internalType": "uint256", "name": "tokenAmount", "type": "uint256" },
+      { "internalType": "uint256", "name": "sPaid", "type": "uint256" }
+    ],
+    "name": "Buy",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "internalType": "uint256", "name": "tokenAmount", "type": "uint256" },
+      { "internalType": "uint256", "name": "sAmount", "type": "uint256" }
+    ],
+    "name": "FullTimelockWithdrawExecuted",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "internalType": "uint256", "name": "tokenAmount", "type": "uint256" },
+      { "internalType": "uint256", "name": "sAmount", "type": "uint256" },
+      { "internalType": "uint256", "name": "requestTime", "type": "uint256" }
+    ],
+    "name": "FullTimelockWithdrawRequested",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [{ "internalType": "uint256", "name": "newPrice", "type": "uint256" }],
+    "name": "InitialPriceUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "address", "name": "previousOwner", "type": "address" },
+      { "indexed": true, "internalType": "address", "name": "newOwner", "type": "address" }
+    ],
+    "name": "OwnershipTransferred",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [{ "internalType": "address", "name": "account", "type": "address" }],
+    "name": "Paused",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [{ "internalType": "uint256", "name": "newIncrease", "type": "uint256" }],
+    "name": "PriceIncreaseUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "address", "name": "seller", "type": "address" },
+      { "internalType": "uint256", "name": "tokenAmount", "type": "uint256" },
+      { "internalType": "uint256", "name": "sReceived", "type": "uint256" }
+    ],
+    "name": "Sell",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [{ "internalType": "uint256", "name": "newFee", "type": "uint256" }],
+    "name": "SellFeeUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "address", "name": "pool", "type": "address" },
+      { "internalType": "uint256", "name": "tokenAmount", "type": "uint256" },
+      { "internalType": "uint256", "name": "sAmount", "type": "uint256" }
+    ],
+    "name": "SentToLiquidityPool",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "internalType": "uint256", "name": "totalBought", "type": "uint256" },
+      { "internalType": "uint256", "name": "totalSoldBack", "type": "uint256" }
+    ],
+    "name": "ThresholdReached",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [{ "internalType": "uint256", "name": "amount", "type": "uint256" }],
+    "name": "TokenTransferred",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [{ "internalType": "address", "name": "account", "type": "address" }],
+    "name": "Unpaused",
+    "type": "event"
+  },
+  {
+    "inputs": [],
+    "name": "MAX_TOKEN_AMOUNT_PER_TX",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "THRESHOLD",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "WITHDRAW_DELAY",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "name": "balances",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "tokenAmount", "type": "uint256" }],
+    "name": "buy",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "cancelFullWithdraw",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "executeFullTimelockWithdraw",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "fullTimelockWithdraw",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getPoolS",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "initialPrice",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "jackpotAddress",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "owner",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "pause",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "paused",
+    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "poolS",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "priceIncrease",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "renounceOwnership",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "tokenAmount", "type": "uint256" }],
+    "name": "sell",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "sellFee",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "pool", "type": "address" },
+      { "internalType": "uint256", "name": "tokenAmount", "type": "uint256" },
+      { "internalType": "uint256", "name": "sAmount", "type": "uint256" }
+    ],
+    "name": "sendToLiquidityPool",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "_newPrice", "type": "uint256" }],
+    "name": "setInitialPrice",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "_jackpotAddress", "type": "address" }],
+    "name": "setJackpotAddress",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "_newIncrease", "type": "uint256" }],
+    "name": "setPriceIncrease",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "_fee", "type": "uint256" }],
+    "name": "setSellFee",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "token100x",
+    "outputs": [{ "internalType": "contract IERC20", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "totalBought",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "totalSoldBack",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "newOwner", "type": "address" }],
+    "name": "transferOwnership",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "unpause",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "withdrawRequest",
+    "outputs": [
+      { "internalType": "uint256", "name": "tokenAmount", "type": "uint256" },
+      { "internalType": "uint256", "name": "sAmount", "type": "uint256" },
+      { "internalType": "uint256", "name": "requestTime", "type": "uint256" },
+      { "internalType": "bool", "name": "active", "type": "bool" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  { "stateMutability": "payable", "type": "receive" }
 ];
 
-
-const JACKPOT_ADDRESS = '0x5D1c6D024B38666FBf0D2205722288Dd857AB6Fb';
-const TOKEN_ADDRESS = '0x0388c8502CA45f04fA5f67a4596fE727c80290C5';
-const BONDING_CURVE_ADDRESS = '0x31Ef1dF550F44FEc3c0285847Ccf8b2a1bc794Cc';
-const SONIC_TESTNET_CHAIN_ID = '57054';
-const SONIC_TESTNET_RPC_URL = 'https://rpc.blaze.soniclabs.com';
-const HINT_API_URL = 'https://whatstheca.fun/.netlify/functions/get-hint';
-
-// Define button style
+// Button style
 const buttonStyle: React.CSSProperties = {
   margin: '5px',
   padding: '10px',
@@ -1771,7 +1144,7 @@ const buttonStyle: React.CSSProperties = {
   transition: 'background-color 0.2s, transform 0.1s',
 };
 
-// Define interfaces
+// Interfaces
 interface HintData {
   hint: string;
 }
@@ -1779,9 +1152,9 @@ interface HintData {
 const App: React.FC = () => {
   const [account, setAccount] = useState<string | null>(null);
   const [web3, setWeb3] = useState<Web3 | null>(null);
-  const [jackpotContract, setJackpotContract] = useState<any>(null);
-  const [tokenContract, setTokenContract] = useState<any>(null);
-  const [bondingContract, setBondingContract] = useState<any>(null);
+  const [jackpotContract, setJackpotContract] = useState<Contract<typeof jackpotGameABI> | null>(null);
+  const [tokenContract, setTokenContract] = useState<Contract<typeof token100xABI> | null>(null);
+  const [bondingContract, setBondingContract] = useState<Contract<typeof bondingCurveABI> | null>(null);
   const [totalGuesses, setTotalGuesses] = useState<number>(0);
   const [jackpotAmount, setJackpotAmount] = useState<string>('0');
   const [nextJackpotAmount, setNextJackpotAmount] = useState<string>('0');
@@ -1796,24 +1169,23 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
 
-  // Debounced fetchGameStats to prevent excessive calls
   const fetchGameStats = useCallback(async () => {
     if (!jackpotContract || !tokenContract || !bondingContract || !account || !web3) return;
     try {
-      const guessesCall = await jackpotContract.methods.totalGuesses().call();
-      const guesses = guessesCall ? BigInt(guessesCall).toString() : '0';
-      const jackpotCall = await jackpotContract.methods.jackpotAmount().call();
-      const jackpot = jackpotCall ? jackpotCall.toString() : '0';
-      const nextJackpotCall = await jackpotContract.methods.nextJackpotAmount().call();
-      const nextJackpot = nextJackpotCall ? nextJackpotCall.toString() : '0';
-      const playerCall = await jackpotContract.methods.playerGuesses(account).call();
-      const player = playerCall ? playerCall.toString() : '0';
-      const costCall = await jackpotContract.methods.guessCost().call();
-      const cost = costCall ? costCall.toString() : '0';
-      const balanceCall = await tokenContract.methods.balanceOf(account).call();
-      const balance = balanceCall ? balanceCall.toString() : '0';
-      const splitCall = await jackpotContract.methods.getSplit().call();
-      const split = splitCall.map(val => Number(val.toString()));
+      const guessesCall = await jackpotContract.methods.totalGuesses().call() as string;
+      const guesses = BigInt(guessesCall).toString();
+      const jackpotCall = await jackpotContract.methods.jackpotAmount().call() as string;
+      const jackpot = jackpotCall;
+      const nextJackpotCall = await jackpotContract.methods.nextJackpotAmount().call() as string;
+      const nextJackpot = nextJackpotCall;
+      const playerCall = await jackpotContract.methods.playerGuesses(account).call() as string;
+      const player = playerCall;
+      const costCall = await jackpotContract.methods.guessCost().call() as string;
+      const cost = costCall;
+      const balanceCall = await tokenContract.methods.balanceOf(account).call() as string;
+      const balance = balanceCall;
+      const splitCall = await jackpotContract.methods.getSplit().call() as [string, string, string, string];
+      const split = splitCall.map((val: string) => Number(val));
 
       setTotalGuesses(parseInt(guesses));
       setJackpotAmount(web3.utils.fromWei(jackpot, 'ether'));
@@ -1824,11 +1196,10 @@ const App: React.FC = () => {
       setSplits(split);
     } catch (error) {
       console.error("Fetch game stats error:", error);
-      setError(`Failed to fetch game stats: ${error.message || 'Check console.'}`);
+      setError(`Failed to fetch game stats: ${error instanceof Error ? error.message : 'Check console.'}`);
     }
   }, [jackpotContract, tokenContract, bondingContract, account, web3]);
 
-  // Initialize Web3 and handle wallet events
   useEffect(() => {
     const initWeb3 = async () => {
       if (!window.ethereum) {
@@ -1839,10 +1210,27 @@ const App: React.FC = () => {
       try {
         const chainId = await web3Instance.eth.getChainId();
         if (chainId.toString() !== SONIC_TESTNET_CHAIN_ID) {
-          await window.ethereum.request({
-            method: 'wallet_switchEthereumChain',
-            params: [{ chainId: `0x${parseInt(SONIC_TESTNET_CHAIN_ID).toString(16)}` }],
-          });
+          try {
+            await window.ethereum.request({
+              method: 'wallet_switchEthereumChain',
+              params: [{ chainId: `0x${parseInt(SONIC_TESTNET_CHAIN_ID).toString(16)}` }],
+            });
+          } catch (switchError: any) {
+            if (switchError.code === 4902) {
+              await window.ethereum.request({
+                method: 'wallet_addEthereumChain',
+                params: [{
+                  chainId: `0x${parseInt(SONIC_TESTNET_CHAIN_ID).toString(16)}`,
+                  chainName: 'Sonic Testnet',
+                  rpcUrls: [SONIC_TESTNET_RPC_URL],
+                  nativeCurrency: { name: 'Sonic', symbol: 'S', decimals: 18 },
+                  blockExplorerUrls: ['https://testnet.soniclabs.com'],
+                }],
+              });
+            } else {
+              throw switchError;
+            }
+          }
         }
         await window.ethereum.request({ method: 'eth_requestAccounts' });
         const accounts = await web3Instance.eth.getAccounts();
@@ -1860,7 +1248,7 @@ const App: React.FC = () => {
         await fetchGameStats();
       } catch (error) {
         console.error("Web3 initialization error:", error);
-        setError(`Failed to connect or load data: ${error.message || 'Check console.'}`);
+        setError(`Failed to connect or load data: ${error instanceof Error ? error.message : 'Check console.'}`);
       }
     };
     initWeb3();
@@ -1891,7 +1279,7 @@ const App: React.FC = () => {
             method: 'wallet_switchEthereumChain',
             params: [{ chainId: `0x${parseInt(SONIC_TESTNET_CHAIN_ID).toString(16)}` }],
           });
-        } catch (switchError) {
+        } catch (switchError: any) {
           if (switchError.code === 4902) {
             await window.ethereum.request({
               method: 'wallet_addEthereumChain',
@@ -1915,7 +1303,7 @@ const App: React.FC = () => {
       setError(null);
     } catch (error) {
       console.error("Wallet connection error:", error);
-      setError(`Failed to connect wallet: ${error.message || 'Check console.'}`);
+      setError(`Failed to connect wallet: ${error instanceof Error ? error.message : 'Check console.'}`);
     }
   };
 
@@ -1927,17 +1315,17 @@ const App: React.FC = () => {
     try {
       const token100X = new web3.eth.Contract(token100xABI, TOKEN_ADDRESS);
       const amount = web3.utils.toWei(buyAmount, 'mwei');
-      const initialPriceCall = await bondingContract.methods.initialPrice().call();
-      const initialPrice = initialPriceCall ? BigInt(initialPriceCall).toString() : '0';
-      const priceIncreaseCall = await bondingContract.methods.priceIncrease().call();
-      const priceIncrease = priceIncreaseCall ? BigInt(priceIncreaseCall).toString() : '0';
-      const totalBoughtCall = await bondingContract.methods.totalBought().call();
-      const totalBought = totalBoughtCall ? BigInt(totalBoughtCall).toString() : '0';
-      const tokenBalanceCall = await token100X.methods.balanceOf(BONDING_CURVE_ADDRESS).call();
-      const tokenBalance = tokenBalanceCall ? BigInt(tokenBalanceCall).toString() : '0';
+      const initialPriceCall = await bondingContract.methods.initialPrice().call() as string;
+      const initialPrice = BigInt(initialPriceCall);
+      const priceIncreaseCall = await bondingContract.methods.priceIncrease().call() as string;
+      const priceIncrease = BigInt(priceIncreaseCall);
+      const totalBoughtCall = await bondingContract.methods.totalBought().call() as string;
+      const totalBought = BigInt(totalBoughtCall);
+      const tokenBalanceCall = await token100X.methods.balanceOf(BONDING_CURVE_ADDRESS).call() as string;
+      const tokenBalance = BigInt(tokenBalanceCall);
 
-      const startPrice = BigInt(initialPrice) + (BigInt(totalBought) / BigInt(10**6)) * BigInt(priceIncrease);
-      const endPrice = startPrice + (BigInt(amount) / BigInt(10**6)) * BigInt(priceIncrease);
+      const startPrice = initialPrice + (totalBought / BigInt(10**6)) * priceIncrease;
+      const endPrice = startPrice + (BigInt(amount) / BigInt(10**6)) * priceIncrease;
       const totalCost = (startPrice + endPrice) * (BigInt(amount) / BigInt(10**6)) / (2n * 10n**18n);
       const costInWei = totalCost.toString();
 
@@ -1945,7 +1333,7 @@ const App: React.FC = () => {
       if (walletBalance < BigInt(costInWei)) {
         throw new Error(`Insufficient S: Need ${web3.utils.fromWei(costInWei, 'ether')} S`);
       }
-      if (BigInt(tokenBalance) < BigInt(amount)) {
+      if (tokenBalance < BigInt(amount)) {
         throw new Error(`BondingCurve has insufficient 100X: Need ${web3.utils.fromWei(amount, 'mwei')}`);
       }
 
@@ -1955,7 +1343,7 @@ const App: React.FC = () => {
       await fetchGameStats();
     } catch (error) {
       console.error("Buy 100X error:", error);
-      setError(`Failed to buy 100X: ${error.message || 'Check console.'}`);
+      setError(`Failed to buy 100X: ${error instanceof Error ? error.message : 'Check console.'}`);
     }
   };
 
@@ -1966,8 +1354,8 @@ const App: React.FC = () => {
     }
     try {
       const amount = web3.utils.toWei(sellAmount, 'mwei');
-      const userBalance = BigInt(await tokenContract.methods.balanceOf(account).call());
-      const currentAllowance = BigInt(await tokenContract.methods.allowance(account, BONDING_CURVE_ADDRESS).call());
+      const userBalance = BigInt(await tokenContract.methods.balanceOf(account).call() as string);
+      const currentAllowance = BigInt(await tokenContract.methods.allowance(account, BONDING_CURVE_ADDRESS).call() as string);
 
       if (userBalance < BigInt(amount)) {
         throw new Error(`Insufficient 100X balance: Need ${sellAmount}`);
@@ -1983,7 +1371,7 @@ const App: React.FC = () => {
       await fetchGameStats();
     } catch (error) {
       console.error("Sell 100X error:", error);
-      setError(`Failed to sell 100X: ${error.message || 'Check console.'}`);
+      setError(`Failed to sell 100X: ${error instanceof Error ? error.message : 'Check console.'}`);
     }
   };
 
@@ -1993,14 +1381,14 @@ const App: React.FC = () => {
       return;
     }
     try {
-      const isPaused = await jackpotContract.methods.paused().call();
+      const isPaused = await jackpotContract.methods.paused().call() as boolean;
       if (isPaused) {
         throw new Error("Game is paused. Cannot submit guesses.");
       }
 
-      const cost = await jackpotContract.methods.guessCost().call();
-      const userBalance = BigInt(await tokenContract.methods.balanceOf(account).call());
-      const currentAllowance = BigInt(await tokenContract.methods.allowance(account, JACKPOT_ADDRESS).call());
+      const cost = await jackpotContract.methods.guessCost().call() as string;
+      const userBalance = BigInt(await tokenContract.methods.balanceOf(account).call() as string);
+      const currentAllowance = BigInt(await tokenContract.methods.allowance(account, JACKPOT_ADDRESS).call() as string);
 
       if (userBalance < BigInt(cost)) {
         throw new Error(`Insufficient 100X balance: Need ${web3.utils.fromWei(cost, 'mwei')} 100X`);
@@ -2023,7 +1411,7 @@ const App: React.FC = () => {
       await fetchGameStats();
     } catch (error) {
       console.error("Commit guess error:", error);
-      setError(`Failed to submit guess: ${error.message || 'Check console.'}`);
+      setError(`Failed to submit guess: ${error instanceof Error ? error.message : 'Check console.'}`);
     }
   };
 
@@ -2039,7 +1427,7 @@ const App: React.FC = () => {
         await fetchGameStats();
         setError("You won! Payout processed. Check your wallet.");
       } else {
-        const hintCount = BigInt(await jackpotContract.methods.hintCount().call()).toString();
+        const hintCount = BigInt(await jackpotContract.methods.hintCount().call() as string).toString();
         const hintNum = parseInt(hintCount);
         setHint(hintNum > 0
           ? `Wrong guess! Hint #${hintNum - 1} available. Request a hint below.`
@@ -2049,9 +1437,55 @@ const App: React.FC = () => {
       setNonce('');
     } catch (error) {
       console.error("Reveal guess error:", error);
-      setError(`Failed to reveal guess: ${error.message || 'Check console.'}`);
+      setError(`Failed to reveal guess: ${error instanceof Error ? error.message : 'Check console.'}`);
     }
   };
+
+  useEffect(() => {
+    if (!web3 || !account || !jackpotContract || !tokenContract) return;
+
+    const handleHintRequested = async (event: any) => {
+      const hintIndex = (event.returnValues as { player: string; hintIndex: string }).hintIndex;
+      try {
+        const response = await fetch(`${HINT_API_URL}?index=${hintIndex}&player=${account}`);
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        const hintData: HintData = await response.json();
+        setHint(`Hint #${hintIndex}: ${hintData.hint}`);
+        setError("Hint retrieved!");
+      } catch (fetchError) {
+        console.error("Hint fetch error:", fetchError);
+        setError(`Failed to fetch hint #${hintIndex}: ${fetchError instanceof Error ? fetchError.message : 'Check console.'}`);
+      }
+    };
+
+    if (web3 && jackpotContract) {
+      let subscription: any; // Temporary any, refine if needed
+      web3.eth.subscribe('logs', {
+        address: JACKPOT_ADDRESS,
+        topics: [web3.utils.sha3('HintRequested(address,uint256)')!, web3.utils.padLeft(account, 64)]
+      }).then((sub) => {
+        subscription = sub;
+        sub.on('data', (event: any) => {
+          handleHintRequested({ returnValues: { hintIndex: event.data } });
+        });
+        sub.on('error', (error: any) => {
+          console.error("Event error:", error);
+          setError(`Failed to receive hint event: ${error instanceof Error ? error.message : 'Check console.'}`);
+        });
+      });
+
+      return () => {
+        if (subscription) {
+          subscription.unsubscribe((error: any, success: boolean) => {
+            if (error) console.error("Failed to unsubscribe from HintRequested:", error);
+            if (success) console.log("Successfully unsubscribed from HintRequested");
+          });
+        }
+      };
+    }
+  }, [web3, account, jackpotContract, tokenContract]);
 
   const requestHint = async () => {
     if (!web3 || !account || !jackpotContract || !tokenContract) {
@@ -2059,9 +1493,9 @@ const App: React.FC = () => {
       return;
     }
     try {
-      const cost = await jackpotContract.methods.hintCost().call();
-      const userBalance = BigInt(await tokenContract.methods.balanceOf(account).call());
-      const currentAllowance = BigInt(await tokenContract.methods.allowance(account, JACKPOT_ADDRESS).call());
+      const cost = await jackpotContract.methods.hintCost().call() as string;
+      const userBalance = BigInt(await tokenContract.methods.balanceOf(account).call() as string);
+      const currentAllowance = BigInt(await tokenContract.methods.allowance(account, JACKPOT_ADDRESS).call() as string);
 
       if (userBalance < BigInt(cost)) {
         throw new Error(`Insufficient 100X balance: Need ${web3.utils.fromWei(cost, 'mwei')} 100X`);
@@ -2072,19 +1506,12 @@ const App: React.FC = () => {
       }
       await tokenContract.methods.approve(JACKPOT_ADDRESS, cost).send({ from: account });
 
-      const tx = await jackpotContract.methods.requestHint().send({ from: account });
-      const hintIndex = tx.events.HintRequested.returnValues.hintIndex;
-      const response = await fetch(`${HINT_API_URL}?index=${hintIndex}&player=${account}`);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch hint: HTTP ${response.status}`);
-      }
-      const hintData: HintData = await response.json();
-      setHint(`Hint #${hintIndex}: ${hintData.hint}`);
-      setError("Hint retrieved!");
+      await jackpotContract.methods.requestHint().send({ from: account });
+      setError("Hint requested! Waiting for hint...");
       await fetchGameStats();
     } catch (error) {
       console.error("Request hint error:", error);
-      setError(`Failed to request hint: ${error.message || 'Check console.'}`);
+      setError(`Failed to request hint: ${error instanceof Error ? error.message : 'Check console.'}`);
     }
   };
 
