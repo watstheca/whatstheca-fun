@@ -1882,40 +1882,41 @@ const App: React.FC = () => {
     };
 
     const buy100X = async () => {
-        if (!web3 || !account || !buyAmount || !bondingContract) {
-            setError("Wallet not connected, invalid amount, or contract not initialized.");
-            return;
-        }
-        try {
-            const token100X = new web3.eth.Contract(token100xABI, TOKEN_ADDRESS);
-            const amount = web3.utils.toWei(buyAmount, 'mwei');
-            const initialPrice = await bondingContract.methods.initialPrice().call();
-            const priceIncrease = await bondingContract.methods.priceIncrease().call();
-            const totalBought = await bondingContract.methods.totalBought().call();
-            const tokenBalance = await token100X.methods.balanceOf(BONDING_CURVE_ADDRESS).call();
-
-            const startPrice = BigInt(initialPrice) + (BigInt(totalBought) / BigInt(10**6)) * BigInt(priceIncrease);
-            const endPrice = startPrice + (BigInt(amount) / BigInt(10**6)) * BigInt(priceIncrease);
-            const totalCost = (startPrice + endPrice) * (BigInt(amount) / BigInt(10**6)) / (2n * 10n**18n);
-            const costInWei = totalCost.toString();
-
-            const walletBalance = await web3.eth.getBalance(account);
-            if (BigInt(walletBalance) < BigInt(costInWei)) {
-                throw new Error(`Insufficient S: Need ${web3.utils.fromWei(costInWei, 'ether')} S`);
-            }
-            if (BigInt(tokenBalance) < BigInt(amount)) {
-                throw new Error(`BondingCurve has insufficient 100X: Need ${web3.utils.fromWei(amount, 'mwei')}`);
-            }
-
-            await bondingContract.methods.buy(amount).send({ from: account, value: costInWei });
-            setError(`Bought ${buyAmount} 100X!`);
-            setBuyAmount('');
-            fetchGameStats();
-        } catch (error) {
-            console.error("Buy 100X error:", error);
-            setError(`Failed to buy 100X: ${error.message || 'Check console.'}`);
-        }
-    };
+      if (!web3 || !account || !buyAmount || !bondingContract) {
+          setError("Wallet not connected, invalid amount, or contract not initialized.");
+          return;
+      }
+      try {
+          const token100X = new web3.eth.Contract(token100xABI, TOKEN_ADDRESS);
+          const amount = web3.utils.toWei(buyAmount, 'mwei');
+          const initialPrice = await bondingContract.methods.initialPrice().call();
+          const priceIncrease = await bondingContract.methods.priceIncrease().call();
+          const totalBought = await bondingContract.methods.totalBought().call();
+          const tokenBalanceCall = await token100X.methods.balanceOf(BONDING_CURVE_ADDRESS).call(); // Explicit await
+          const tokenBalance = BigInt(tokenBalanceCall.toString()); // Convert to BigInt safely
+  
+          const startPrice = BigInt(initialPrice) + (BigInt(totalBought) / BigInt(10**6)) * BigInt(priceIncrease);
+          const endPrice = startPrice + (BigInt(amount) / BigInt(10**6)) * BigInt(priceIncrease);
+          const totalCost = (startPrice + endPrice) * (BigInt(amount) / BigInt(10**6)) / (2n * 10n**18n);
+          const costInWei = totalCost.toString();
+  
+          const walletBalance = await web3.eth.getBalance(account);
+          if (BigInt(walletBalance) < BigInt(costInWei)) {
+              throw new Error(`Insufficient S: Need ${web3.utils.fromWei(costInWei, 'ether')} S`);
+          }
+          if (tokenBalance < BigInt(amount)) {
+              throw new Error(`BondingCurve has insufficient 100X: Need ${web3.utils.fromWei(amount, 'mwei')}`);
+          }
+  
+          await bondingContract.methods.buy(amount).send({ from: account, value: costInWei });
+          setError(`Bought ${buyAmount} 100X!`);
+          setBuyAmount('');
+          fetchGameStats();
+      } catch (error) {
+          console.error("Buy 100X error:", error);
+          setError(`Failed to buy 100X: ${error.message || 'Check console.'}`);
+      }
+  };
 
     const sell100X = async () => {
         if (!web3 || !account || !sellAmount || !bondingContract || !tokenContract) {
