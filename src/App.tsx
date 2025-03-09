@@ -1882,41 +1882,45 @@ const App: React.FC = () => {
     };
 
     const buy100X = async () => {
-      if (!web3 || !account || !buyAmount || !bondingContract) {
-          setError("Wallet not connected, invalid amount, or contract not initialized.");
-          return;
-      }
-      try {
-          const token100X = new web3.eth.Contract(token100xABI, TOKEN_ADDRESS);
-          const amount = web3.utils.toWei(buyAmount, 'mwei');
-          const initialPrice = await bondingContract.methods.initialPrice().call();
-          const priceIncrease = await bondingContract.methods.priceIncrease().call();
-          const totalBought = await bondingContract.methods.totalBought().call();
-          const tokenBalanceCall = await token100X.methods.balanceOf(BONDING_CURVE_ADDRESS).call(); // Explicit await
-          const tokenBalance = BigInt(tokenBalanceCall.toString()); // Convert to BigInt safely
-  
-          const startPrice = BigInt(initialPrice) + (BigInt(totalBought) / BigInt(10**6)) * BigInt(priceIncrease);
-          const endPrice = startPrice + (BigInt(amount) / BigInt(10**6)) * BigInt(priceIncrease);
-          const totalCost = (startPrice + endPrice) * (BigInt(amount) / BigInt(10**6)) / (2n * 10n**18n);
-          const costInWei = totalCost.toString();
-  
-          const walletBalance = await web3.eth.getBalance(account);
-          if (BigInt(walletBalance) < BigInt(costInWei)) {
-              throw new Error(`Insufficient S: Need ${web3.utils.fromWei(costInWei, 'ether')} S`);
-          }
-          if (tokenBalance < BigInt(amount)) {
-              throw new Error(`BondingCurve has insufficient 100X: Need ${web3.utils.fromWei(amount, 'mwei')}`);
-          }
-  
-          await bondingContract.methods.buy(amount).send({ from: account, value: costInWei });
-          setError(`Bought ${buyAmount} 100X!`);
-          setBuyAmount('');
-          fetchGameStats();
-      } catch (error) {
-          console.error("Buy 100X error:", error);
-          setError(`Failed to buy 100X: ${error.message || 'Check console.'}`);
-      }
-  };
+        if (!web3 || !account || !buyAmount || !bondingContract) {
+            setError("Wallet not connected, invalid amount, or contract not initialized.");
+            return;
+        }
+        try {
+            const token100X = new web3.eth.Contract(token100xABI, TOKEN_ADDRESS);
+            const amount = web3.utils.toWei(buyAmount, 'mwei');
+            const initialPrice = await bondingContract.methods.initialPrice().call() as string;
+            const priceIncrease = await bondingContract.methods.priceIncrease().call() as string;
+            const totalBought = await bondingContract.methods.totalBought().call() as string;
+            const tokenBalanceCall = await token100X.methods.balanceOf(BONDING_CURVE_ADDRESS).call() as string;
+
+            if (!tokenBalanceCall || typeof tokenBalanceCall !== 'string') {
+                throw new Error("Failed to fetch token balance from BondingCurve");
+            }
+            const tokenBalance = BigInt(tokenBalanceCall);
+
+            const startPrice = BigInt(initialPrice) + (BigInt(totalBought) / BigInt(10**6)) * BigInt(priceIncrease);
+            const endPrice = startPrice + (BigInt(amount) / BigInt(10**6)) * BigInt(priceIncrease);
+            const totalCost = (startPrice + endPrice) * (BigInt(amount) / BigInt(10**6)) / (2n * 10n**18n);
+            const costInWei = totalCost.toString();
+
+            const walletBalance = await web3.eth.getBalance(account) as string;
+            if (BigInt(walletBalance) < BigInt(costInWei)) {
+                throw new Error(`Insufficient S: Need ${web3.utils.fromWei(costInWei, 'ether')} S`);
+            }
+            if (tokenBalance < BigInt(amount)) {
+                throw new Error(`BondingCurve has insufficient 100X: Need ${web3.utils.fromWei(amount, 'mwei')}`);
+            }
+
+            await bondingContract.methods.buy(amount).send({ from: account, value: costInWei });
+            setError(`Bought ${buyAmount} 100X!`);
+            setBuyAmount('');
+            fetchGameStats();
+        } catch (error) {
+            console.error("Buy 100X error:", error);
+            setError(`Failed to buy 100X: ${error.message || 'Check console.'}`);
+        }
+    };
 
     const sell100X = async () => {
         if (!web3 || !account || !sellAmount || !bondingContract || !tokenContract) {
@@ -1925,14 +1929,20 @@ const App: React.FC = () => {
         }
         try {
             const amount = web3.utils.toWei(sellAmount, 'mwei');
-            const userBalance = await tokenContract.methods.balanceOf(account).call();
-            const currentAllowance = await tokenContract.methods.allowance(account, BONDING_CURVE_ADDRESS).call();
+            const userBalanceCall = await tokenContract.methods.balanceOf(account).call() as string;
+            const currentAllowanceCall = await tokenContract.methods.allowance(account, BONDING_CURVE_ADDRESS).call() as string;
 
-            if (BigInt(userBalance) < BigInt(amount)) {
+            if (!userBalanceCall || typeof userBalanceCall !== 'string') {
+                throw new Error("Failed to fetch user balance");
+            }
+            const userBalance = BigInt(userBalanceCall);
+            const currentAllowance = BigInt(currentAllowanceCall);
+
+            if (userBalance < BigInt(amount)) {
                 throw new Error(`Insufficient 100X balance: Need ${sellAmount}`);
             }
 
-            if (BigInt(currentAllowance) > 0n) {
+            if (currentAllowance > 0n) {
                 await tokenContract.methods.approve(BONDING_CURVE_ADDRESS, 0).send({ from: account });
             }
 
@@ -1953,20 +1963,26 @@ const App: React.FC = () => {
             return;
         }
         try {
-            const isPaused = await jackpotContract.methods.paused().call();
+            const isPaused = await jackpotContract.methods.paused().call() as boolean;
             if (isPaused) {
                 throw new Error("Game is paused. Cannot submit guesses.");
             }
 
-            const cost = await jackpotContract.methods.guessCost().call();
-            const userBalance = await tokenContract.methods.balanceOf(account).call();
-            const currentAllowance = await tokenContract.methods.allowance(account, JACKPOT_ADDRESS).call();
+            const cost = await jackpotContract.methods.guessCost().call() as string;
+            const userBalanceCall = await tokenContract.methods.balanceOf(account).call() as string;
+            const currentAllowanceCall = await tokenContract.methods.allowance(account, JACKPOT_ADDRESS).call() as string;
+
+            if (!userBalanceCall || typeof userBalanceCall !== 'string') {
+                throw new Error("Failed to fetch user balance");
+            }
+            const userBalance = BigInt(userBalanceCall);
+            const currentAllowance = BigInt(currentAllowanceCall);
 
             if (BigInt(userBalance) < BigInt(cost)) {
                 throw new Error(`Insufficient 100X balance: Need ${web3.utils.fromWei(cost, 'mwei')} 100X`);
             }
 
-            if (BigInt(currentAllowance) > 0n) {
+            if (currentAllowance > 0n) {
                 await tokenContract.methods.approve(JACKPOT_ADDRESS, 0).send({ from: account });
             }
 
@@ -1997,7 +2013,7 @@ const App: React.FC = () => {
                 fetchGameStats(); // Update jackpot amounts after win
                 setError("You won! Payout processed. Check your wallet.");
             } else {
-                const hintCount = await jackpotContract.methods.hintCount().call();
+                const hintCount = await jackpotContract.methods.hintCount().call() as string;
                 const hintNum = parseInt(hintCount);
                 setHint(hintNum > 0
                     ? `Wrong guess! Hint #${hintNum - 1} available. Request a hint below.`
@@ -2017,15 +2033,21 @@ const App: React.FC = () => {
             return;
         }
         try {
-            const cost = await jackpotContract.methods.hintCost().call();
-            const userBalance = await tokenContract.methods.balanceOf(account).call();
-            const currentAllowance = await tokenContract.methods.allowance(account, JACKPOT_ADDRESS).call();
+            const cost = await jackpotContract.methods.hintCost().call() as string;
+            const userBalanceCall = await tokenContract.methods.balanceOf(account).call() as string;
+            const currentAllowanceCall = await tokenContract.methods.allowance(account, JACKPOT_ADDRESS).call() as string;
+
+            if (!userBalanceCall || typeof userBalanceCall !== 'string') {
+                throw new Error("Failed to fetch user balance");
+            }
+            const userBalance = BigInt(userBalanceCall);
+            const currentAllowance = BigInt(currentAllowanceCall);
 
             if (BigInt(userBalance) < BigInt(cost)) {
                 throw new Error(`Insufficient 100X balance: Need ${web3.utils.fromWei(cost, 'mwei')} 100X`);
             }
 
-            if (BigInt(currentAllowance) > 0n) {
+            if (currentAllowance > 0n) {
                 await tokenContract.methods.approve(JACKPOT_ADDRESS, 0).send({ from: account });
             }
 
@@ -2063,22 +2085,26 @@ const App: React.FC = () => {
 
     const fetchGameStats = async () => {
         if (jackpotContract && tokenContract && bondingContract && account && web3) {
-            const guesses = await jackpotContract.methods.totalGuesses().call();
-            const jackpot = await jackpotContract.methods.jackpotAmount().call();
-            const nextJackpot = await jackpotContract.methods.nextJackpotAmount().call();
-            const player = await jackpotContract.methods.playerGuesses(account).call();
-            const cost = await jackpotContract.methods.guessCost().call();
-            const balance = await tokenContract.methods.balanceOf(account).call();
-            const split = await jackpotContract.methods.getSplit().call();
-            const splitArray = [split[0], split[1], split[2], split[3]].map(val => Number(val));
+            try {
+                const guesses = await jackpotContract.methods.totalGuesses().call() as string;
+                const jackpot = await jackpotContract.methods.jackpotAmount().call() as string;
+                const nextJackpot = await jackpotContract.methods.nextJackpotAmount().call() as string;
+                const player = await jackpotContract.methods.playerGuesses(account).call() as string;
+                const cost = await jackpotContract.methods.guessCost().call() as string;
+                const balance = await tokenContract.methods.balanceOf(account).call() as string;
+                const split = await jackpotContract.methods.getSplit().call() as [string, string, string, string];
 
-            setTotalGuesses(parseInt(guesses));
-            setJackpotAmount(web3.utils.fromWei(jackpot, 'ether'));
-            setNextJackpotAmount(web3.utils.fromWei(nextJackpot, 'ether'));
-            setPlayerGuesses(parseInt(player));
-            setGuessCost(web3.utils.fromWei(cost, 'mwei'));
-            setTokenBalance(web3.utils.fromWei(balance, 'mwei'));
-            setSplits(splitArray);
+                setTotalGuesses(parseInt(guesses));
+                setJackpotAmount(web3.utils.fromWei(jackpot, 'ether'));
+                setNextJackpotAmount(web3.utils.fromWei(nextJackpot, 'ether'));
+                setPlayerGuesses(parseInt(player));
+                setGuessCost(web3.utils.fromWei(cost, 'mwei'));
+                setTokenBalance(web3.utils.fromWei(balance, 'mwei'));
+                setSplits(split.map(val => Number(val)));
+            } catch (error) {
+                console.error("Fetch game stats error:", error);
+                setError("Failed to fetch game stats. Check console.");
+            }
         }
     };
 
@@ -2138,7 +2164,7 @@ const App: React.FC = () => {
                             placeholder="Amount to sell"
                             style={{ margin: '5px', padding: '5px' }}
                             value={sellAmount}
-                            onChange={(e) => setBuyAmount(e.target.value)}
+                            onChange={(e) => setSellAmount(e.target.value)}
                         />
                         <button
                             style={{ ...buttonStyle, backgroundColor: '#ff0000', color: '#fff' }}
