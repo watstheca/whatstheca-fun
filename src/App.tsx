@@ -1803,64 +1803,64 @@ const App: React.FC = () => {
     const [hint, setHint] = useState<string | null>(null);
 
     useEffect(() => {
-        const initWeb3 = async () => {
-            if (window.ethereum) {
-                const web3Instance = new Web3(window.ethereum);
-                try {
-                    const chainId = await web3Instance.eth.getChainId();
-                    if (chainId.toString() !== SONIC_TESTNET_CHAIN_ID) {
-                        try {
-                            await window.ethereum.request({
-                                method: 'wallet_switchEthereumChain',
-                                params: [{ chainId: `0x${parseInt(SONIC_TESTNET_CHAIN_ID).toString(16)}` }],
-                            });
-                        } catch (switchError: unknown) {
-                            const isMetaMaskError = switchError && typeof switchError === 'object' && 'code' in switchError;
-                            if (isMetaMaskError && (switchError as MetaMaskError).code === 4902) {
-                                await window.ethereum.request({
-                                    method: 'wallet_addEthereumChain',
-                                    params: [{
-                                        chainId: `0x${parseInt(SONIC_TESTNET_CHAIN_ID).toString(16)}`,
-                                        chainName: 'Sonic Testnet',
-                                        rpcUrls: [SONIC_TESTNET_RPC_URL],
-                                        nativeCurrency: {
-                                            name: 'Sonic',
-                                            symbol: 'S',
-                                            decimals: 18,
-                                        },
-                                        blockExplorerUrls: ['https://testnet.soniclabs.com'],
-                                    }],
-                                });
-                            } else {
-                                throw switchError;
-                            }
-                        }
-                    }
-                    await window.ethereum.request({ method: 'eth_requestAccounts' });
-                    const accounts = await web3Instance.eth.getAccounts();
-                    setAccount(accounts[0]);
-                    setWeb3(web3Instance);
-
-                    const jackpotGame = new web3Instance.eth.Contract(jackpotGameABI, JACKPOT_ADDRESS);
-                    const token100X = new web3Instance.eth.Contract(token100xABI, TOKEN_ADDRESS);
-                    const bondingCurve = new web3Instance.eth.Contract(bondingCurveABI, BONDING_CURVE_ADDRESS);
-
-                    setJackpotContract(jackpotGame);
-                    setTokenContract(token100X);
-                    setBondingContract(bondingCurve);
-
-                    await fetchGameStats();
-                } catch (error: unknown) {
-                    console.error("Web3 initialization error:", error);
-                    const errorMessage = error instanceof Error ? error.message : 'Check console.';
-                    setError(`Failed to connect or load data: ${errorMessage}`);
-                }
-            } else {
-                setError("Please install MetaMask or Rabby to connect.");
-            }
-        };
-        initWeb3();
-    }, []);
+      const initWeb3 = async () => {
+          if (window.ethereum) {
+              const web3Instance = new Web3(window.ethereum);
+              try {
+                  const chainId = await web3Instance.eth.getChainId();
+                  if (chainId.toString() !== SONIC_TESTNET_CHAIN_ID) {
+                      try {
+                          await window.ethereum.request({
+                              method: 'wallet_switchEthereumChain',
+                              params: [{ chainId: `0x${parseInt(SONIC_TESTNET_CHAIN_ID).toString(16)}` }],
+                          });
+                      } catch (switchError: unknown) {
+                          const isMetaMaskError = switchError && typeof switchError === 'object' && 'code' in switchError;
+                          if (isMetaMaskError && (switchError as MetaMaskError).code === 4902) {
+                              await window.ethereum.request({
+                                  method: 'wallet_addEthereumChain',
+                                  params: [{
+                                      chainId: `0x${parseInt(SONIC_TESTNET_CHAIN_ID).toString(16)}`,
+                                      chainName: 'Sonic Testnet',
+                                      rpcUrls: [SONIC_TESTNET_RPC_URL],
+                                      nativeCurrency: {
+                                          name: 'Sonic',
+                                          symbol: 'S',
+                                          decimals: 18,
+                                      },
+                                      blockExplorerUrls: ['https://testnet.soniclabs.com'],
+                                  }],
+                              });
+                          } else {
+                              throw switchError;
+                          }
+                      }
+                  }
+                  await window.ethereum.request({ method: 'eth_requestAccounts' });
+                  const accounts = await web3Instance.eth.getAccounts();
+                  setAccount(accounts[0]);
+                  setWeb3(web3Instance);
+  
+                  const jackpotGame = new web3Instance.eth.Contract(jackpotGameABI, JACKPOT_ADDRESS);
+                  const token100X = new web3Instance.eth.Contract(token100xABI, TOKEN_ADDRESS);
+                  const bondingCurve = new web3Instance.eth.Contract(bondingCurveABI, BONDING_CURVE_ADDRESS);
+  
+                  setJackpotContract(jackpotGame);
+                  setTokenContract(token100X);
+                  setBondingContract(bondingCurve);
+  
+                  await fetchGameStats();
+              } catch (error: unknown) {
+                  console.error("Web3 initialization error:", error);
+                  const errorMessage = error instanceof Error ? error.message : 'Check console.';
+                  setError(`Failed to connect or load data: ${errorMessage}`);
+              }
+          } else {
+              setError("Please install MetaMask or Rabby to connect.");
+          }
+      };
+      initWeb3();
+  }, [fetchGameStats]); // Added fetchGameStats to dependency array
 
     const connectWallet = async () => {
         if (window.ethereum) {
