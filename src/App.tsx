@@ -1754,7 +1754,7 @@ const bondingCurveABI = [
 ];
 
 
-const JACKPOT_ADDRESS = '0x5D1c6D024B38666FBf0D2205722288Dd857AB6Fb'; 
+const JACKPOT_ADDRESS = '0x5D1c6D024B38666FBf0D2205722288Dd857AB6Fb';
 const TOKEN_ADDRESS = '0x0388c8502CA45f04fA5f67a4596fE727c80290C5';
 const BONDING_CURVE_ADDRESS = '0x31Ef1dF550F44FEc3c0285847Ccf8b2a1bc794Cc';
 const SONIC_TESTNET_CHAIN_ID = '57054';
@@ -1802,65 +1802,119 @@ const App: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [hint, setHint] = useState<string | null>(null);
 
+    const fetchGameStats = useCallback(async () => {
+        if (jackpotContract && tokenContract && bondingContract && account && web3) {
+            try {
+                const guessesCall = await jackpotContract.methods.totalGuesses().call();
+                if (!guessesCall || typeof guessesCall !== 'string') {
+                    throw new Error("Failed to fetch total guesses");
+                }
+                const guesses = BigInt(guessesCall).toString();
+                const jackpotCall = await jackpotContract.methods.jackpotAmount().call();
+                if (!jackpotCall || typeof jackpotCall !== 'string') {
+                    throw new Error("Failed to fetch jackpot amount");
+                }
+                const jackpot = jackpotCall;
+                const nextJackpotCall = await jackpotContract.methods.nextJackpotAmount().call();
+                if (!nextJackpotCall || typeof nextJackpotCall !== 'string') {
+                    throw new Error("Failed to fetch next jackpot amount");
+                }
+                const nextJackpot = nextJackpotCall;
+                const playerCall = await jackpotContract.methods.playerGuesses(account).call();
+                if (!playerCall || typeof playerCall !== 'string') {
+                    throw new Error("Failed to fetch player guesses");
+                }
+                const player = playerCall;
+                const costCall = await jackpotContract.methods.guessCost().call();
+                if (!costCall || typeof costCall !== 'string') {
+                    throw new Error("Failed to fetch guess cost");
+                }
+                const cost = costCall;
+                const balanceCall = await tokenContract.methods.balanceOf(account).call();
+                if (!balanceCall || typeof balanceCall !== 'string') {
+                    throw new Error("Failed to fetch token balance");
+                }
+                const balance = balanceCall;
+                const splitCall = await jackpotContract.methods.getSplit().call();
+                if (!splitCall || !Array.isArray(splitCall) || splitCall.length !== 4 || splitCall.some(val => typeof val !== 'string')) {
+                    throw new Error("Failed to fetch split values");
+                }
+                const split = splitCall as [string, string, string, string];
+
+                setTotalGuesses(parseInt(guesses));
+                setJackpotAmount(web3.utils.fromWei(jackpot, 'ether'));
+                setNextJackpotAmount(web3.utils.fromWei(nextJackpot, 'ether'));
+                setPlayerGuesses(parseInt(player));
+                setGuessCost(web3.utils.fromWei(cost, 'mwei'));
+                setTokenBalance(web3.utils.fromWei(balance, 'mwei'));
+                setSplits(split.map(val => Number(val)));
+            } catch (error: unknown) {
+                console.error("Fetch game stats error:", error);
+                const errorMessage = error instanceof Error ? error.message : 'Check console.';
+                setError(`Failed to fetch game stats: ${errorMessage}`);
+            }
+        }
+    }, [jackpotContract, tokenContract, bondingContract, account, web3]);
+
     useEffect(() => {
-      const initWeb3 = async () => {
-          if (window.ethereum) {
-              const web3Instance = new Web3(window.ethereum);
-              try {
-                  const chainId = await web3Instance.eth.getChainId();
-                  if (chainId.toString() !== SONIC_TESTNET_CHAIN_ID) {
-                      try {
-                          await window.ethereum.request({
-                              method: 'wallet_switchEthereumChain',
-                              params: [{ chainId: `0x${parseInt(SONIC_TESTNET_CHAIN_ID).toString(16)}` }],
-                          });
-                      } catch (switchError: unknown) {
-                          const isMetaMaskError = switchError && typeof switchError === 'object' && 'code' in switchError;
-                          if (isMetaMaskError && (switchError as MetaMaskError).code === 4902) {
-                              await window.ethereum.request({
-                                  method: 'wallet_addEthereumChain',
-                                  params: [{
-                                      chainId: `0x${parseInt(SONIC_TESTNET_CHAIN_ID).toString(16)}`,
-                                      chainName: 'Sonic Testnet',
-                                      rpcUrls: [SONIC_TESTNET_RPC_URL],
-                                      nativeCurrency: {
-                                          name: 'Sonic',
-                                          symbol: 'S',
-                                          decimals: 18,
-                                      },
-                                      blockExplorerUrls: ['https://testnet.soniclabs.com'],
-                                  }],
-                              });
-                          } else {
-                              throw switchError;
-                          }
-                      }
-                  }
-                  await window.ethereum.request({ method: 'eth_requestAccounts' });
-                  const accounts = await web3Instance.eth.getAccounts();
-                  setAccount(accounts[0]);
-                  setWeb3(web3Instance);
-  
-                  const jackpotGame = new web3Instance.eth.Contract(jackpotGameABI, JACKPOT_ADDRESS);
-                  const token100X = new web3Instance.eth.Contract(token100xABI, TOKEN_ADDRESS);
-                  const bondingCurve = new web3Instance.eth.Contract(bondingCurveABI, BONDING_CURVE_ADDRESS);
-  
-                  setJackpotContract(jackpotGame);
-                  setTokenContract(token100X);
-                  setBondingContract(bondingCurve);
-  
-                  await fetchGameStats();
-              } catch (error: unknown) {
-                  console.error("Web3 initialization error:", error);
-                  const errorMessage = error instanceof Error ? error.message : 'Check console.';
-                  setError(`Failed to connect or load data: ${errorMessage}`);
-              }
-          } else {
-              setError("Please install MetaMask or Rabby to connect.");
-          }
-      };
-      initWeb3();
-  }, [fetchGameStats]); // Added fetchGameStats to dependency array
+        const initWeb3 = async () => {
+            if (window.ethereum) {
+                const web3Instance = new Web3(window.ethereum);
+                try {
+                    const chainId = await web3Instance.eth.getChainId();
+                    if (chainId.toString() !== SONIC_TESTNET_CHAIN_ID) {
+                        try {
+                            await window.ethereum.request({
+                                method: 'wallet_switchEthereumChain',
+                                params: [{ chainId: `0x${parseInt(SONIC_TESTNET_CHAIN_ID).toString(16)}` }],
+                            });
+                        } catch (switchError: unknown) {
+                            const isMetaMaskError = switchError && typeof switchError === 'object' && 'code' in switchError;
+                            if (isMetaMaskError && (switchError as MetaMaskError).code === 4902) {
+                                await window.ethereum.request({
+                                    method: 'wallet_addEthereumChain',
+                                    params: [{
+                                        chainId: `0x${parseInt(SONIC_TESTNET_CHAIN_ID).toString(16)}`,
+                                        chainName: 'Sonic Testnet',
+                                        rpcUrls: [SONIC_TESTNET_RPC_URL],
+                                        nativeCurrency: {
+                                            name: 'Sonic',
+                                            symbol: 'S',
+                                            decimals: 18,
+                                        },
+                                        blockExplorerUrls: ['https://testnet.soniclabs.com'],
+                                    }],
+                                });
+                            } else {
+                                throw switchError;
+                            }
+                        }
+                    }
+                    await window.ethereum.request({ method: 'eth_requestAccounts' });
+                    const accounts = await web3Instance.eth.getAccounts();
+                    setAccount(accounts[0]);
+                    setWeb3(web3Instance);
+
+                    const jackpotGame = new web3Instance.eth.Contract(jackpotGameABI, JACKPOT_ADDRESS);
+                    const token100X = new web3Instance.eth.Contract(token100xABI, TOKEN_ADDRESS);
+                    const bondingCurve = new web3Instance.eth.Contract(bondingCurveABI, BONDING_CURVE_ADDRESS);
+
+                    setJackpotContract(jackpotGame);
+                    setTokenContract(token100X);
+                    setBondingContract(bondingCurve);
+
+                    await fetchGameStats();
+                } catch (error: unknown) {
+                    console.error("Web3 initialization error:", error);
+                    const errorMessage = error instanceof Error ? error.message : 'Check console.';
+                    setError(`Failed to connect or load data: ${errorMessage}`);
+                }
+            } else {
+                setError("Please install MetaMask or Rabby to connect.");
+            }
+        };
+        initWeb3();
+    }, [fetchGameStats]);
 
     const connectWallet = async () => {
         if (window.ethereum) {
@@ -2064,7 +2118,7 @@ const App: React.FC = () => {
             const tx = await jackpotContract.methods.revealGuess(guessInput, nonce).send({ from: account });
             const won = tx.events?.GuessRevealed?.returnValues?.won === 'true';
             if (won) {
-                await fetchGameStats(); // Update jackpot amounts after win
+                await fetchGameStats();
                 setError("You won! Payout processed. Check your wallet.");
             } else {
                 const hintCountCall = await jackpotContract.methods.hintCount().call();
@@ -2087,117 +2141,63 @@ const App: React.FC = () => {
     };
 
     const requestHint = async () => {
-      if (!web3 || !account || !jackpotContract || !tokenContract) {
-          setError("Wallet not connected or contracts not initialized.");
-          return;
-      }
-      try {
-          const cost = await jackpotContract.methods.hintCost().call() as string;
-          const userBalanceCall = await tokenContract.methods.balanceOf(account).call();
-          if (!userBalanceCall || typeof userBalanceCall !== 'string') {
-              throw new Error("Failed to fetch user balance");
-          }
-          const userBalance = BigInt(userBalanceCall);
-          const currentAllowanceCall = await tokenContract.methods.allowance(account, JACKPOT_ADDRESS).call();
-          if (!currentAllowanceCall || typeof currentAllowanceCall !== 'string') {
-              throw new Error("Failed to fetch allowance");
-          }
-          const currentAllowance = BigInt(currentAllowanceCall);
-  
-          if (BigInt(userBalance) < BigInt(cost)) {
-              throw new Error(`Insufficient 100X balance: Need ${web3.utils.fromWei(cost, 'mwei')} 100X`);
-          }
-  
-          if (currentAllowance > 0n) {
-              await tokenContract.methods.approve(JACKPOT_ADDRESS, 0).send({ from: account });
-          }
-  
-          await tokenContract.methods.approve(JACKPOT_ADDRESS, cost).send({ from: account });
-  
-          jackpotContract.events.HintRequested({ filter: { player: account } })
-              .on('data', async (event: HintRequestedEvent) => {
-                  const hintIndex = event.returnValues.hintIndex as string;
-                  try {
-                      const response = await fetch(`${HINT_API_URL}?index=${hintIndex}&player=${account}`);
-                      if (!response.ok) {
-                          throw new Error(`HTTP error! Status: ${response.status}`);
-                      }
-                      const hintData: HintData = await response.json();
-                      setHint(`Hint #${hintIndex}: ${hintData.hint}`);
-                      setError("Hint retrieved!");
-                  } catch (fetchError: unknown) {
-                      console.error("Hint fetch error:", fetchError);
-                      const errorMessage = fetchError instanceof Error ? fetchError.message : 'Check console.';
-                      setError(`Failed to fetch hint #${hintIndex}: ${errorMessage}`);
-                  }
-              })
-              .on('error', (error: Error) => {
-                  console.error("Event error:", error);
-                  const errorMessage = error instanceof Error ? error.message : 'Check console.';
-                  setError(`Failed to receive hint event: ${errorMessage}`);
-              });
-  
-          await jackpotContract.methods.requestHint().send({ from: account });
-          setError("Hint requested! Waiting for hint...");
-          await fetchGameStats();
-      } catch (error: unknown) {
-          console.error("Request hint error:", error);
-          const errorMessage = error instanceof Error ? error.message : 'Check console.';
-          setError(`Failed to request hint: ${errorMessage}`);
-      }
-  };
-
-    const fetchGameStats = async () => {
-        if (jackpotContract && tokenContract && bondingContract && account && web3) {
-            try {
-                const guessesCall = await jackpotContract.methods.totalGuesses().call();
-                if (!guessesCall || typeof guessesCall !== 'string') {
-                    throw new Error("Failed to fetch total guesses");
-                }
-                const guesses = BigInt(guessesCall).toString();
-                const jackpotCall = await jackpotContract.methods.jackpotAmount().call();
-                if (!jackpotCall || typeof jackpotCall !== 'string') {
-                    throw new Error("Failed to fetch jackpot amount");
-                }
-                const jackpot = jackpotCall;
-                const nextJackpotCall = await jackpotContract.methods.nextJackpotAmount().call();
-                if (!nextJackpotCall || typeof nextJackpotCall !== 'string') {
-                    throw new Error("Failed to fetch next jackpot amount");
-                }
-                const nextJackpot = nextJackpotCall;
-                const playerCall = await jackpotContract.methods.playerGuesses(account).call();
-                if (!playerCall || typeof playerCall !== 'string') {
-                    throw new Error("Failed to fetch player guesses");
-                }
-                const player = playerCall;
-                const costCall = await jackpotContract.methods.guessCost().call();
-                if (!costCall || typeof costCall !== 'string') {
-                    throw new Error("Failed to fetch guess cost");
-                }
-                const cost = costCall;
-                const balanceCall = await tokenContract.methods.balanceOf(account).call();
-                if (!balanceCall || typeof balanceCall !== 'string') {
-                    throw new Error("Failed to fetch token balance");
-                }
-                const balance = balanceCall;
-                const splitCall = await jackpotContract.methods.getSplit().call();
-                if (!splitCall || !Array.isArray(splitCall) || splitCall.length !== 4 || splitCall.some(val => typeof val !== 'string')) {
-                    throw new Error("Failed to fetch split values");
-                }
-                const split = splitCall as [string, string, string, string];
-
-                setTotalGuesses(parseInt(guesses));
-                setJackpotAmount(web3.utils.fromWei(jackpot, 'ether'));
-                setNextJackpotAmount(web3.utils.fromWei(nextJackpot, 'ether'));
-                setPlayerGuesses(parseInt(player));
-                setGuessCost(web3.utils.fromWei(cost, 'mwei'));
-                setTokenBalance(web3.utils.fromWei(balance, 'mwei'));
-                setSplits(split.map(val => Number(val)));
-            } catch (error: unknown) {
-                console.error("Fetch game stats error:", error);
-                const errorMessage = error instanceof Error ? error.message : 'Check console.';
-                setError(`Failed to fetch game stats: ${errorMessage}`);
+        if (!web3 || !account || !jackpotContract || !tokenContract) {
+            setError("Wallet not connected or contracts not initialized.");
+            return;
+        }
+        try {
+            const cost = await jackpotContract.methods.hintCost().call() as string;
+            const userBalanceCall = await tokenContract.methods.balanceOf(account).call();
+            if (!userBalanceCall || typeof userBalanceCall !== 'string') {
+                throw new Error("Failed to fetch user balance");
             }
+            const userBalance = BigInt(userBalanceCall);
+            const currentAllowanceCall = await tokenContract.methods.allowance(account, JACKPOT_ADDRESS).call();
+            if (!currentAllowanceCall || typeof currentAllowanceCall !== 'string') {
+                throw new Error("Failed to fetch allowance");
+            }
+            const currentAllowance = BigInt(currentAllowanceCall);
+
+            if (BigInt(userBalance) < BigInt(cost)) {
+                throw new Error(`Insufficient 100X balance: Need ${web3.utils.fromWei(cost, 'mwei')} 100X`);
+            }
+
+            if (currentAllowance > 0n) {
+                await tokenContract.methods.approve(JACKPOT_ADDRESS, 0).send({ from: account });
+            }
+
+            await tokenContract.methods.approve(JACKPOT_ADDRESS, cost).send({ from: account });
+
+            jackpotContract.events.HintRequested({ filter: { player: account } })
+                .on('data', async (event: HintRequestedEvent) => {
+                    const hintIndex = event.returnValues.hintIndex as string;
+                    try {
+                        const response = await fetch(`${HINT_API_URL}?index=${hintIndex}&player=${account}`);
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! Status: ${response.status}`);
+                        }
+                        const hintData: HintData = await response.json();
+                        setHint(`Hint #${hintIndex}: ${hintData.hint}`);
+                        setError("Hint retrieved!");
+                    } catch (fetchError: unknown) {
+                        console.error("Hint fetch error:", fetchError);
+                        const errorMessage = fetchError instanceof Error ? fetchError.message : 'Check console.';
+                        setError(`Failed to fetch hint #${hintIndex}: ${errorMessage}`);
+                    }
+                })
+                .on('error', (error: Error) => {
+                    console.error("Event error:", error);
+                    const errorMessage = error instanceof Error ? error.message : 'Check console.';
+                    setError(`Failed to receive hint event: ${errorMessage}`);
+                });
+
+            await jackpotContract.methods.requestHint().send({ from: account });
+            setError("Hint requested! Waiting for hint...");
+            await fetchGameStats();
+        } catch (error: unknown) {
+            console.error("Request hint error:", error);
+            const errorMessage = error instanceof Error ? error.message : 'Check console.';
+            setError(`Failed to request hint: ${errorMessage}`);
         }
     };
 
@@ -2216,10 +2216,10 @@ const App: React.FC = () => {
                 {!account ? (
                     <button
                         style={{ ...buttonStyle, backgroundColor: '#00d4ff', color: '#1a1a2e' }}
-                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#00e4ff')}
-                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#00d4ff')}
-                        onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.95)')}
-                        onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                        onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = '#00e4ff')}
+                        onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = '#00d4ff')}
+                        onMouseDown={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.transform = 'scale(0.95)')}
+                        onMouseUp={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.transform = 'scale(1)')}
                         onClick={connectWallet}
                     >
                         Connect MetaMask/Rabby
