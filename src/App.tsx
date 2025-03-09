@@ -9,7 +9,7 @@ const TOKEN_ADDRESS = '0x0388c8502CA45f04fA5f67a4596fE727c80290C5';
 const BONDING_CURVE_ADDRESS = '0x31Ef1dF550F44FEc3c0285847Ccf8b2a1bc794Cc';
 const SONIC_TESTNET_CHAIN_ID = '57054';
 const SONIC_TESTNET_RPC_URL = 'https://rpc.blaze.soniclabs.com';
-const HINT_API_URL = 'https://whatstheca.fun/.netlify/functions/get-hint';
+//const HINT_API_URL = 'https://whatstheca.fun/.netlify/functions/get-hint';
 
 // ABIs (from your provided document)
 const jackpotGameABI = [
@@ -1145,9 +1145,9 @@ const buttonStyle: React.CSSProperties = {
 };
 
 // Interfaces
-interface HintData {
-  hint: string;
-}
+//interface HintData {
+//  hint: string;
+//}
 
 const App: React.FC = () => {
   const [account, setAccount] = useState<string | null>(null);
