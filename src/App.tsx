@@ -1741,7 +1741,7 @@ const bondingCurveABI = [
 ];
 
 
-const JACKPOT_ADDRESS = '0x5D1c6D024B38666FBf0D2205722288Dd857AB6Fb'; // Replace with your deployed contract address
+const JACKPOT_ADDRESS = '0x5D1c6D024B38666FBf0D2205722288Dd857AB6Fb'; 
 const TOKEN_ADDRESS = '0x0388c8502CA45f04fA5f67a4596fE727c80290C5';
 const BONDING_CURVE_ADDRESS = '0x31Ef1dF550F44FEc3c0285847Ccf8b2a1bc794Cc';
 const SONIC_TESTNET_CHAIN_ID = '57054';
@@ -1889,23 +1889,26 @@ const App: React.FC = () => {
         try {
             const token100X = new web3.eth.Contract(token100xABI, TOKEN_ADDRESS);
             const amount = web3.utils.toWei(buyAmount, 'mwei');
-            const initialPrice = await bondingContract.methods.initialPrice().call() as string;
-            const priceIncrease = await bondingContract.methods.priceIncrease().call() as string;
-            const totalBought = await bondingContract.methods.totalBought().call() as string;
-            const tokenBalanceCall = await token100X.methods.balanceOf(BONDING_CURVE_ADDRESS).call() as string;
-
+            const initialPrice = BigInt((await bondingContract.methods.initialPrice().call()) as string);
+            const priceIncrease = BigInt((await bondingContract.methods.priceIncrease().call()) as string);
+            const totalBought = BigInt((await bondingContract.methods.totalBought().call()) as string);
+            const tokenBalanceCall = await token100X.methods.balanceOf(BONDING_CURVE_ADDRESS).call();
             if (!tokenBalanceCall || typeof tokenBalanceCall !== 'string') {
                 throw new Error("Failed to fetch token balance from BondingCurve");
             }
             const tokenBalance = BigInt(tokenBalanceCall);
 
-            const startPrice = BigInt(initialPrice) + (BigInt(totalBought) / BigInt(10**6)) * BigInt(priceIncrease);
-            const endPrice = startPrice + (BigInt(amount) / BigInt(10**6)) * BigInt(priceIncrease);
+            const startPrice = initialPrice + (totalBought / BigInt(10**6)) * priceIncrease;
+            const endPrice = startPrice + (BigInt(amount) / BigInt(10**6)) * priceIncrease;
             const totalCost = (startPrice + endPrice) * (BigInt(amount) / BigInt(10**6)) / (2n * 10n**18n);
             const costInWei = totalCost.toString();
 
-            const walletBalance = await web3.eth.getBalance(account) as string;
-            if (BigInt(walletBalance) < BigInt(costInWei)) {
+            const walletBalanceCall = await web3.eth.getBalance(account);
+            if (!walletBalanceCall || typeof walletBalanceCall !== 'string') {
+                throw new Error("Failed to fetch wallet balance");
+            }
+            const walletBalance = BigInt(walletBalanceCall);
+            if (walletBalance < BigInt(costInWei)) {
                 throw new Error(`Insufficient S: Need ${web3.utils.fromWei(costInWei, 'ether')} S`);
             }
             if (tokenBalance < BigInt(amount)) {
@@ -1929,13 +1932,15 @@ const App: React.FC = () => {
         }
         try {
             const amount = web3.utils.toWei(sellAmount, 'mwei');
-            const userBalanceCall = await tokenContract.methods.balanceOf(account).call() as string;
-            const currentAllowanceCall = await tokenContract.methods.allowance(account, BONDING_CURVE_ADDRESS).call() as string;
-
+            const userBalanceCall = await tokenContract.methods.balanceOf(account).call();
             if (!userBalanceCall || typeof userBalanceCall !== 'string') {
                 throw new Error("Failed to fetch user balance");
             }
             const userBalance = BigInt(userBalanceCall);
+            const currentAllowanceCall = await tokenContract.methods.allowance(account, BONDING_CURVE_ADDRESS).call();
+            if (!currentAllowanceCall || typeof currentAllowanceCall !== 'string') {
+                throw new Error("Failed to fetch allowance");
+            }
             const currentAllowance = BigInt(currentAllowanceCall);
 
             if (userBalance < BigInt(amount)) {
@@ -1969,13 +1974,15 @@ const App: React.FC = () => {
             }
 
             const cost = await jackpotContract.methods.guessCost().call() as string;
-            const userBalanceCall = await tokenContract.methods.balanceOf(account).call() as string;
-            const currentAllowanceCall = await tokenContract.methods.allowance(account, JACKPOT_ADDRESS).call() as string;
-
+            const userBalanceCall = await tokenContract.methods.balanceOf(account).call();
             if (!userBalanceCall || typeof userBalanceCall !== 'string') {
                 throw new Error("Failed to fetch user balance");
             }
             const userBalance = BigInt(userBalanceCall);
+            const currentAllowanceCall = await tokenContract.methods.allowance(account, JACKPOT_ADDRESS).call();
+            if (!currentAllowanceCall || typeof currentAllowanceCall !== 'string') {
+                throw new Error("Failed to fetch allowance");
+            }
             const currentAllowance = BigInt(currentAllowanceCall);
 
             if (BigInt(userBalance) < BigInt(cost)) {
@@ -2013,7 +2020,11 @@ const App: React.FC = () => {
                 fetchGameStats(); // Update jackpot amounts after win
                 setError("You won! Payout processed. Check your wallet.");
             } else {
-                const hintCount = await jackpotContract.methods.hintCount().call() as string;
+                const hintCountCall = await jackpotContract.methods.hintCount().call();
+                if (!hintCountCall || typeof hintCountCall !== 'string') {
+                    throw new Error("Failed to fetch hint count");
+                }
+                const hintCount = BigInt(hintCountCall).toString();
                 const hintNum = parseInt(hintCount);
                 setHint(hintNum > 0
                     ? `Wrong guess! Hint #${hintNum - 1} available. Request a hint below.`
@@ -2034,13 +2045,15 @@ const App: React.FC = () => {
         }
         try {
             const cost = await jackpotContract.methods.hintCost().call() as string;
-            const userBalanceCall = await tokenContract.methods.balanceOf(account).call() as string;
-            const currentAllowanceCall = await tokenContract.methods.allowance(account, JACKPOT_ADDRESS).call() as string;
-
+            const userBalanceCall = await tokenContract.methods.balanceOf(account).call();
             if (!userBalanceCall || typeof userBalanceCall !== 'string') {
                 throw new Error("Failed to fetch user balance");
             }
             const userBalance = BigInt(userBalanceCall);
+            const currentAllowanceCall = await tokenContract.methods.allowance(account, JACKPOT_ADDRESS).call();
+            if (!currentAllowanceCall || typeof currentAllowanceCall !== 'string') {
+                throw new Error("Failed to fetch allowance");
+            }
             const currentAllowance = BigInt(currentAllowanceCall);
 
             if (BigInt(userBalance) < BigInt(cost)) {
@@ -2086,13 +2099,41 @@ const App: React.FC = () => {
     const fetchGameStats = async () => {
         if (jackpotContract && tokenContract && bondingContract && account && web3) {
             try {
-                const guesses = await jackpotContract.methods.totalGuesses().call() as string;
-                const jackpot = await jackpotContract.methods.jackpotAmount().call() as string;
-                const nextJackpot = await jackpotContract.methods.nextJackpotAmount().call() as string;
-                const player = await jackpotContract.methods.playerGuesses(account).call() as string;
-                const cost = await jackpotContract.methods.guessCost().call() as string;
-                const balance = await tokenContract.methods.balanceOf(account).call() as string;
-                const split = await jackpotContract.methods.getSplit().call() as [string, string, string, string];
+                const guessesCall = await jackpotContract.methods.totalGuesses().call();
+                if (!guessesCall || typeof guessesCall !== 'string') {
+                    throw new Error("Failed to fetch total guesses");
+                }
+                const guesses = BigInt(guessesCall).toString();
+                const jackpotCall = await jackpotContract.methods.jackpotAmount().call();
+                if (!jackpotCall || typeof jackpotCall !== 'string') {
+                    throw new Error("Failed to fetch jackpot amount");
+                }
+                const jackpot = jackpotCall;
+                const nextJackpotCall = await jackpotContract.methods.nextJackpotAmount().call();
+                if (!nextJackpotCall || typeof nextJackpotCall !== 'string') {
+                    throw new Error("Failed to fetch next jackpot amount");
+                }
+                const nextJackpot = nextJackpotCall;
+                const playerCall = await jackpotContract.methods.playerGuesses(account).call();
+                if (!playerCall || typeof playerCall !== 'string') {
+                    throw new Error("Failed to fetch player guesses");
+                }
+                const player = playerCall;
+                const costCall = await jackpotContract.methods.guessCost().call();
+                if (!costCall || typeof costCall !== 'string') {
+                    throw new Error("Failed to fetch guess cost");
+                }
+                const cost = costCall;
+                const balanceCall = await tokenContract.methods.balanceOf(account).call();
+                if (!balanceCall || typeof balanceCall !== 'string') {
+                    throw new Error("Failed to fetch token balance");
+                }
+                const balance = balanceCall;
+                const splitCall = await jackpotContract.methods.getSplit().call();
+                if (!splitCall || !Array.isArray(splitCall) || splitCall.length !== 4 || splitCall.some(val => typeof val !== 'string')) {
+                    throw new Error("Failed to fetch split values");
+                }
+                const split = splitCall as [string, string, string, string];
 
                 setTotalGuesses(parseInt(guesses));
                 setJackpotAmount(web3.utils.fromWei(jackpot, 'ether'));
@@ -2164,7 +2205,7 @@ const App: React.FC = () => {
                             placeholder="Amount to sell"
                             style={{ margin: '5px', padding: '5px' }}
                             value={sellAmount}
-                            onChange={(e) => setSellAmount(e.target.value)}
+                            onChange={(e) => setSellAmount(e.target.value)} // Fixed to setSellAmount
                         />
                         <button
                             style={{ ...buttonStyle, backgroundColor: '#ff0000', color: '#fff' }}
